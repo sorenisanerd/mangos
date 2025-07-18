@@ -1,0 +1,7 @@
+[Unit]
+Description=Set next boot choice
+Before=systemd-sysupdate-reboot.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "grub-reboot %M_$(/usr/lib/systemd/systemd-sysupdate list | grep current | cut -f2 -d' ')"

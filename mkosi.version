@@ -1,0 +1,3 @@
+#!/bin/sh
+v="$(git describe --tags --dirty | sed -e 's/^v//g')"
+/bin/echo -n "${v:-0.0.1}"

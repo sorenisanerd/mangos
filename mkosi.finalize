@@ -1,0 +1,17 @@
+#!/bin/sh
+export SYFT_CHECK_FOR_APP_UPDATE=0
+
+if [ -n "${SUBIMAGE}" ]
+then
+	NAME="${IMAGE_ID}-${SUBIMAGE}"
+else
+	NAME="${IMAGE_ID}"
+fi
+
+syft scan dir:${BUILDROOT} \
+	--source-name "${NAME}" \
+	--source-version "${IMAGE_VERSION}" \
+	-o "cyclonedx-json=${OUTPUTDIR}/${NAME}_${IMAGE_VERSION}.cyclonedx.json" \
+	-o "github-json=${OUTPUTDIR}/${NAME}_${IMAGE_VERSION}.github.json" \
+	-o "spdx-json=${OUTPUTDIR}/${NAME}_${IMAGE_VERSION}.spdx.json" \
+	-o "syft-json=${OUTPUTDIR}/${NAME}_${IMAGE_VERSION}.syft.json"

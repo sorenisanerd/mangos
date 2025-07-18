@@ -1,0 +1,71 @@
+name: "Build MANGOS"
+
+on:
+  - push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.9.1
+      - name: Prevent man-db dpkg trigger (speeds up setup-mkosi)
+        run: sudo sed '/man-db/ d' -i /var/lib/dpkg/triggers/File
+      - name: setup-mkosi
+        uses: systemd/mkosi@main
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dsaltares/fetch-gh-release-asset@master
+        id: tools-fetch
+        with:
+          repo: ${{ github.repository_owner }}/mangos-tools
+          version: latest
+          file: 'mangos\.tools_.*\.tar\.zst.*'
+          regex: true
+          target: 'dl/'
+      - name: Verify tools signature
+        env:
+          tag: ${{ steps.tools-fetch.outputs.version }}
+        run: |
+          cosign verify-blob  --bundle dl/mangos.tools_*.tar.zst.sigbundle \
+                              --certificate-identity "${{ github.server_url }}/${{ github.repository_owner }}/mangos-tools/.github/workflows/build.yml@refs/tags/${tag}" \
+                              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+                              dl/mangos.tools_*.tar.zst
+      - name: Decompress and stage tools
+        run: mkdir mkosi.tools ; tar -x --zstd -f dl/mangos.tools_*.tar.zst -C mkosi.tools
+      - name: Inject key and cert
+        env:
+          MANGOS_CERT: ${{ vars.MANGOS_CERT }}
+          MANGOS_KEY: ${{ secrets.MANGOS_KEY }}
+        run: |
+          cat <<EOF > mkosi.crt
+          $MANGOS_CERT
+          EOF
+          umask 077
+          cat <<EOF > mkosi.key
+          $MANGOS_KEY
+          EOF
+      - name: Run mkosi
+        run: mkosi --debug ; find out/
+      - name: Remove symlinks
+        run: find out/ -type l -delete
+      - name: Sign artifacts
+        run: for file in out/* ; do cosign sign-blob -d -y --bundle "${file}.sigbundle" "${file}"; done
+      - name: Upload build artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          path: out/mangos_*.raw.zst
+          compression-level: 0
+          name: disk.img
+      - name: Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: out/*

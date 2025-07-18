@@ -1,0 +1,6 @@
+/.cache
+/mkosi.tools
+/.mkosi-private
+/out
+/mkosi.crt
+/mkosi.key
