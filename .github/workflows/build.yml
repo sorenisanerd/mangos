@@ -51,7 +51,11 @@ jobs:
           $MANGOS_KEY
           EOF
       - name: Run mkosi
-        run: mkosi --debug ; find out/
+        run: mkosi --debug
+      - name: List built artifacts
+        run: find out/
+      - name: Export image version for later steps
+        run: echo IMAGE_VERSION="$(./mkosi.version)" >> $GITHUB_ENV
       - name: Test it
         run: |
           #!/bin/bash
@@ -76,15 +80,21 @@ jobs:
 
       - name: Remove symlinks
         run: find out/ -type l -delete
-#      - name: Sign artifacts
-#        run: for file in out/* ; do cosign sign-blob -d -y --bundle "${file}.sigbundle" "${file}"; done
-#      - name: Upload build artifact
-#        id: upload
-#        uses: actions/upload-artifact@v4
-#        with:
-#          path: out/mangos_*.raw.zst
-#          compression-level: 0
-#          name: disk.img
+      - name: Compress artifacts
+        run: for file in out/mangos_*.raw ; do zstd --rm "$file" ; done
+      - name: Sign artifacts
+        run: for file in out/mangos* ; do cosign sign-blob -d -y --bundle "${file}.sigbundle" "${file}"; done
+      - name: Upload build artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          path: |
+            out/mangos_${{ env.IMAGE_VERSION }}.raw.zst
+            out/mangos_${{ env.IMAGE_VERSION }}.cyclonedx.json
+            out/mangos_${{ env.IMAGE_VERSION }}.github.json
+            out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
+            out/mangos_${{ env.IMAGE_VERSION }}.syft.json
+          name: mangos.disk
 #      - name: Release
 #        if: github.ref_type == 'tag'
 #        uses: softprops/action-gh-release@v2
