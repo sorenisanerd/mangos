@@ -15,7 +15,7 @@ jobs:
       - name: Prevent man-db dpkg trigger (speeds up setup-mkosi)
         run: sudo sed '/man-db/ d' -i /var/lib/dpkg/triggers/File
       - name: setup-mkosi
-        uses: systemd/mkosi@main
+        uses: sorenisanerd/mkosi@main
       - name: Checkout code
         uses: actions/checkout@v4
         with:
