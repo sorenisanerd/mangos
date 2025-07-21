@@ -43,6 +43,13 @@ jobs:
           MANGOS_CERT: ${{ vars.MANGOS_CERT }}
           MANGOS_KEY: ${{ secrets.MANGOS_KEY }}
         run: |
+          set -e
+          if [ -z "${MANGOS_CERT}" ] || [ -z "${MANGOS_KEY}" ]; then
+              echo '::warning title=Missing keys::`MANGOS_CERT` or `MANGOS_KEY` was not set. Generating temporary keys.'
+              echo '`MANGOS_CERT` or `MANGOS_KEY` was not set. Build performed with ephemeral keys.' >> ${GITHUB_STEP_SUMMARY}
+              mkosi genkey
+              exit 0
+          fi
           cat <<EOF > mkosi.crt
           $MANGOS_CERT
           EOF
