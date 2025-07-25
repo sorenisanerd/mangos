@@ -108,7 +108,7 @@ jobs:
             out/mangos_${{ env.IMAGE_VERSION }}.github.json
             out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos_${{ env.IMAGE_VERSION }}.syft.json
-          name: ${mangos.${{ matrix.profiles }}.disk
+          name: mangos.${{ matrix.profiles }}.disk
 
   release:
     if: github.ref_type == 'tag'
@@ -122,9 +122,15 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - run: find . -ls
+      - name: Rename artifacts
+        run: |
+          mkdir release
+          mv artifacts/mangos.verity-full.disk/* release/
+          for f in artifacts/mangos.verity-full,docker.disk/* ; do
+            mv "$f" "release/mangos+docker_$(basename $f | cut -f2- -d_)"
+          done
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: out/*
+          files: release/*
