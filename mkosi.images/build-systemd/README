@@ -1,0 +1,3 @@
+Most of this is taken from https://github.com/systemd/systemd.
+
+Only the Ubuntu config has been adjusted for our slightly different build layout, but I kept the other ones here as a starting point if someone cares about the other distros and want to make them work, too.

@@ -1,0 +1,10 @@
+#!/bin/bash
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+PKG_SUBDIR=systemd
+GIT_URL=https://github.com/systemd/systemd
+GIT_SUBDIR=
+GIT_COMMIT=HEAD
+GIT_BRANCH=main
+
+exec mkosi.images/build-systemd/packaging.sync
