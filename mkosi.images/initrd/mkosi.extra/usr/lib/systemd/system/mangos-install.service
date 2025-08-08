@@ -1,0 +1,17 @@
+[Unit]
+Description=Install MANGOS
+After=systemd-networkd-wait-routable.service
+Requires=systemd-networkd-wait-routable.service
+Before=sysroot.mount
+ConditionPathExists=/etc/initrd-release
+ConditionKernelCommandLine=mangos_install_target
+SuccessAction=reboot-immediate
+OnFailure=emergency.target
+
+[Service]
+Type=oneshot
+StandardInput=tty-force
+ExecStart=/usr/lib/mangos/mangos-install
+
+[Install]
+WantedBy=sysroot.mount

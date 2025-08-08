@@ -1,5 +1,9 @@
 #!/bin/sh
 
+# If an install target is given on the command line,
+# make sure the device is available before firing up
+# the installer.
+
 outdir="$1"
 
 if ! grep -q mangos_install_target= /proc/cmdline
@@ -7,7 +11,12 @@ then
         exit 0
 fi
 
-target=$(sed -e 's%.*mangos_install_target=\([a-z0-9/.-]\+\).*%\1%' /proc/cmdline)
+target="$(sed -e 's%.*mangos_install_target=\([a-z0-9/.-]\+\).*%\1%' /proc/cmdline)"
+if [ "$target" = "ask" ]
+then
+        exit 0
+fi
+
 unit="$(systemd-escape ${target}).device"
 
 cat << EOF > "${outdir}/mangos-install.service.d/target-device.conf"

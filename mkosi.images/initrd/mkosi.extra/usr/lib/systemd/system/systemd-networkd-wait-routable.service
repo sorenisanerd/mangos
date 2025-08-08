@@ -1,0 +1,17 @@
+[Unit]
+Description=Wait for at least one routable interface
+Documentation=man:systemd-networkd-wait-online(8)
+ConditionCapability=CAP_NET_ADMIN
+DefaultDependencies=no
+Conflicts=shutdown.target
+BindsTo=systemd-networkd.service
+After=systemd-networkd.service
+Before=network-online.target shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/systemd/systemd-networkd-wait-online -o routable --any
+RemainAfterExit=yes
+
+[Install]
+WantedBy=network-online.target
