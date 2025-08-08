@@ -30,7 +30,9 @@ then
         install_target="$(cat /tmp/mangos_install_target ; rm /tmp/mangos_install_target)"
 fi
 
-$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw https://github.com/sorenisanerd/mangos/releases/download/v0.0.1/mangos_0.0.1.raw.zst "$install_target"
+. /etc/os-release
+
+$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw https://github.com/sorenisanerd/mangos/releases/download/v${IMAGE_VERSION}/mangos_${IMAGE_VERSION}.raw.zst "$install_target"
 
 # There are two copies of the GPT on a block device. One at the start
 # and one at the end. Since the image and the device are unlikely to
