@@ -1,8 +1,0 @@
-[Unit]
-Description=Update grub config
-#ConditionPathExists=!/boot/grub/grub.cfg
-
-[Service]
-Type=oneshot
-ExecStart=-/usr/sbin/grub-install /dev/sda
-ExecStart=-/bin/cp -rv -t / /usr/share/mangosoot

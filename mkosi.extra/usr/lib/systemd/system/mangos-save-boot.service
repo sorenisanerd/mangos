@@ -1,7 +1,0 @@
-[Unit]
-Description=Save boot choice
-After=boot-complete.target
-
-[Service]
-Type=oneshot
-ExecStart=/usr/sbin/grub-set-default %M_%A
