@@ -10,6 +10,10 @@ The installer is provided as a disk image. Look for the `mangos-installer_x.y.z.
 
 Once the network is up, the installer enumerates the block devices and presents a screen to choose the target device. Once selected, the installer streams the appropriate release from Github and writes it directly to the selected block device and reboots. On my test rig, the whole thing takes less than 10 seconds. Very few guard rails and obviously destructive. Any existing data on the target device will be overwritten. Beware.
 
+## First boot process
+
+When mangos boots, it ensures all the right partitions have been created. The disk images we distribute only contain a subset: An ESP (EFI System Partition), a root partition, a verity hash partition, and a signature partition. On first boot, the rest are created: A second set of root/verity/signature partitions (for the A/B update mechanism), a swap partition, `/var/tmp`, and `/var`. The last three are encrypted using a TPM backed key. The key is bound directly to PCR 7 (`--tpm2-pcrs=7`) and indirectly to PCR 11 (`--tpm2-public-key-pcrs=11`). The signatures for the expected values of PCR 11 are embedded in the UKI (Unified Kernel Image). This allows unlocking when booting any UKI signed with the same key, provided PCR 7 has not been changed. PCR 7 records the Secure Boot policy, so disabling Secure Boot, adding/removing keys in the firmware, etc. will all prevent accessing the keys.
+
 ## What is it?
 
 With MANGOS, we want to build a highly secure operating system beyond what you can achieve with garden variety Linux distros.
