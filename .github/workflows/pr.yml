@@ -58,7 +58,10 @@ jobs:
           set -x
           set -e
 
-          screen -d -m -S vm mkosi vm -- -uuid $(uuidgen)
+          # mkosi doesn't pick this up from the tools dir for some reason
+          sudo apt-get install -y ovmf
+
+          mkosi --debug vm -- -uuid $(uuidgen) > vm.log 2>&1 &
 
           success=0
           for try in {1..10}
@@ -70,7 +73,15 @@ jobs:
                   fi
                   sleep 5
           done
-          test $success -eq 1
+
+          if [ $success -eq 1 ]
+          then
+                  echo "mkosi ssh succeeded"
+          else
+                  echo "mkosi ssh failed"
+                  cat vm.log
+                  exit 1
+          fi
           mkosi ssh -- shutdown -h now || true
           sleep 5
 

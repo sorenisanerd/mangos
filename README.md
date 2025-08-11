@@ -48,8 +48,6 @@ With MANGOS, we want to build a highly secure operating system beyond what you c
 First, MANGOS gets installed as an image. The filesystem is [erofs](https://docs.kernel.org/filesystems/erofs.html), so the filesystem driver doesn't even implement any write operations. The image also contains a [Verity](https://docs.kernel.org/admin-guide/device-mapper/verity.html) hash partition. The kernel uses this to verify that the erofs filesystem hasn't been tampered with. A third partition contains a signature for the hash partition. The kernel will check this signature against a certificate that is embedded in the kernel at build time. Also, the kernel itself is signed, and systems are configured with Secure Boot to only allow kernels (or boot managers/loaders) signed by this key. Finally, the system will refuse to start if Secure Boot is disabled.
 The filesystem in the image is the root filesystem, so even `/etc` is read-only.  Configuration is done using [configuration extensions](https://www.freedesktop.org/software/systemd/man/latest/systemd-sysext.html). These are also signed and verified against the certificate in the kernel.
 
-On first boot, `systemd-repart` creates 3 partitions: swap, `/var`, and `/var/tmp`. They are encrypted using a key rooted in the TPM, so can't be decrypted anywhere else.
-
 If you've ever used CoreOS, a lot of these concepts will seem familiar. If you're an Android user, you're using a lot of this already!
 
 ### Runtime environment and compatibility
