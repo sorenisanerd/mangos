@@ -9,7 +9,6 @@ jobs:
       matrix:
         profiles:
           - verity-full
-          - verity-full,build-systemd
           - verity-full,docker
     runs-on: ubuntu-latest
     permissions:
@@ -135,9 +134,6 @@ jobs:
 
           for f in artifacts/mangos.verity-full,docker.disk/* ; do
             mv "$f" "release/mangos+docker_$(basename $f | cut -f2- -d_)"
-          done
-          for f in artifacts/mangos.verity-full,build-systemd.disk/* ; do
-            mv "$f" "release/mangos+systemdgit_$(basename $f | cut -f2- -d_)"
           done
       - name: Release
         uses: softprops/action-gh-release@v2

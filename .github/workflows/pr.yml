@@ -9,7 +9,6 @@ jobs:
       matrix:
         profiles:
           - verity-full
-          - verity-full,build-systemd
           - verity-full,docker
     runs-on: ubuntu-latest
     steps:
