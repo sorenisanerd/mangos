@@ -77,7 +77,7 @@ jobs:
       - name: Remove symlinks
         run: find out/ -type l -delete
       - name: Compress artifacts
-        run: for file in out/mangos_*.raw out/mangos_*.efi; do zstd --rm "$file" ; done
+        run: for file in out/mangos{,-installer}_*.raw out/mangos_*.efi ; do zstd --rm "$file" ; done
       - name: Upload build artifact (disk)
         id: upload-disk
         uses: actions/upload-artifact@v4
@@ -93,3 +93,13 @@ jobs:
             out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos_${{ env.IMAGE_VERSION }}.syft.json
           name: mangos.${{ matrix.profiles }}.disk
+      - name: Upload build artifact (installer)
+        uses: actions/upload-artifact@v4
+        with:
+          path: |
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.raw.zst
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.cyclonedx.json
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.github.json
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.spdx.json
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.syft.json
+          name: mangos.${{ matrix.profiles }}.installer
