@@ -65,6 +65,7 @@ jobs:
       - name: Run mkosi
         env:
           profiles: ${{ matrix.profiles }}
+          MANGOS_GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}
         run: mkosi --debug --profile="${profiles}"
       - name: List built artifacts
         run: find out/
