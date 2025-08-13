@@ -10,16 +10,42 @@ The installer is provided as a disk image. Look for the `mangos-installer_x.y.z.
 
 Once the network is up, the installer enumerates the block devices and presents a screen to choose the target device. Once selected, the installer streams the appropriate release from Github and writes it directly to the selected block device and reboots. On my test rig, the whole thing takes less than 10 seconds. Very few guard rails and obviously destructive. Any existing data on the target device will be overwritten. Beware.
 
-## What is it?
+## First boot process
+
+When mangos boots, it ensures all the right partitions have been created. The disk images we distribute only contain a subset:
+
+* An ESP (EFI System Partition),
+* a root partition,
+* a verity hash partition, and
+* a signature partition.
+
+On first boot, the rest are created:
+
+* An alternate root partition,
+* an alternate verity hash partition,
+* an alternate signature partition,
+* a swap partition,
+* `/var/tmp`, and
+* `/var`.
+
+See the [Updates](#updates) section for more details on the alternate partitions.
+
+The last three are encrypted using a TPM backed key. The key is bound directly to PCR 7 (`--tpm2-pcrs=7`) and indirectly to PCR 11 (`--tpm2-public-key-pcrs=11`). The signatures for the expected values of PCR 11 are embedded in the UKI (Unified Kernel Image). This allows unlocking when booting any UKI signed with the same key, provided PCR 7 has not been changed. PCR 7 records the Secure Boot policy, so disabling Secure Boot, adding/removing keys in the firmware, etc. will all prevent accessing the keys.
+
+## Updates
+
+1. When a new version of Mangos is released, it is made available as a disk image for new installs, and split into partition files for updates.
+1. `systemd-sysupdate` periodically checks for updates. However, it expects to find updates in a flat directory structure. A small, local proxy (`mangos-sd-gh-proxy`) performs the necessary translation.
+1. When an update is found, it is written to the inactive partition set.
+1. On reboot, the bootloader will attempt to boot into the newest version and fall back to the older one if it fails.
+
+## What is MANGOS anyway?
 
 With MANGOS, we want to build a highly secure operating system beyond what you can achieve with garden variety Linux distros.
 
 ### Disk layout
 
 First, MANGOS gets installed as an image. The filesystem is [erofs](https://docs.kernel.org/filesystems/erofs.html), so the filesystem driver doesn't even implement any write operations. The image also contains a [Verity](https://docs.kernel.org/admin-guide/device-mapper/verity.html) hash partition. The kernel uses this to verify that the erofs filesystem hasn't been tampered with. A third partition contains a signature for the hash partition. The kernel will check this signature against a certificate that is embedded in the kernel at build time. Also, the kernel itself is signed, and systems are configured with Secure Boot to only allow kernels (or boot managers/loaders) signed by this key. Finally, the system will refuse to start if Secure Boot is disabled.
-
-System updates are also provided as images. As they are made available, they are downloaded and written to a second set of 3 partitions as (data + hash + signature). On reboot, the bootloader will attempt to boot into the newest version and fall back to the older one if it fails.
-
 The filesystem in the image is the root filesystem, so even `/etc` is read-only.  Configuration is done using [configuration extensions](https://www.freedesktop.org/software/systemd/man/latest/systemd-sysext.html). These are also signed and verified against the certificate in the kernel.
 
 On first boot, `systemd-repart` creates 3 partitions: swap, `/var`, and `/var/tmp`. They are encrypted using a key rooted in the TPM, so can't be decrypted anywhere else.
