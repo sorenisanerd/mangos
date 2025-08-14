@@ -76,6 +76,7 @@ jobs:
           #!/bin/bash
           set -x
           set -e
+          find mkosi.tools -iname '*ovmf*'
           sudo apt-get install -y ovmf
 
           #screen -d -m -S vm 
