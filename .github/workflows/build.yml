@@ -76,6 +76,7 @@ jobs:
           #!/bin/bash
           set -x
           set -e
+          apt-get install -y ovmf
 
           #screen -d -m -S vm 
           mkosi vm -- -uuid $(uuidgen) > vm.log 2>&1 &
