@@ -93,7 +93,7 @@ jobs:
                   sleep 5
           done
 
-          if [ test $success -eq 1 ]
+          if [ $success -eq 1 ]
           then
                   echo "mkosi ssh succeeded"
           else
