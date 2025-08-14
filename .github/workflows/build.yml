@@ -77,7 +77,6 @@ jobs:
           set -x
           set -e
           find mkosi.tools -iname '*ovmf*'
-          sudo apt-get install -y ovmf
 
           #screen -d -m -S vm 
           mkosi vm -- -uuid $(uuidgen) > vm.log 2>&1 &
