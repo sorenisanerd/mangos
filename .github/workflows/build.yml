@@ -79,7 +79,7 @@ jobs:
           find mkosi.tools -iname '*ovmf*'
 
           #screen -d -m -S vm 
-          mkosi vm -- -uuid $(uuidgen) > vm.log 2>&1 &
+          mkosi --debug vm -- -uuid $(uuidgen) > vm.log 2>&1 &
           pid=$!
 
           success=0
