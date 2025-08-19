@@ -1,0 +1,8 @@
+#!/bin/sh
+if [ "$CI" = "true" ]
+then
+    v="$(git describe --tags --dirty | sed -e 's/^v//g')"
+    /bin/echo -n "${v:-0.0.1}"
+    exit 0
+fi
+date +%y%m%d.%H%M
