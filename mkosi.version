@@ -1,3 +1,8 @@
 #!/bin/sh
+if [ "$CI" != "true" ]
+then
+    echo "For local builds, you can delete mkosi.version, and pass -B to mkosi to" 1>&2
+    echo "have mkosi.bump generate a time-based version." 1>&2
+fi
 v="$(git describe --tags --dirty | sed -e 's/^v//g')"
 /bin/echo -n "${v:-0.0.1}"
