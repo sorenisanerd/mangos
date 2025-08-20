@@ -8,14 +8,12 @@ jobs:
     strategy:
       matrix:
         profiles:
-          - verity-full
+          - verity-full,docker-ext
           - verity-full,docker
     runs-on: ubuntu-latest
     steps:
       - name: Install cosign
         uses: sigstore/cosign-installer@v3.9.1
-      - name: Prevent man-db dpkg trigger (speeds up setup-mkosi)
-        run: sudo rm /var/lib/man-db/auto-update
       - name: setup-mkosi
         uses: sorenisanerd/mkosi@main
       - name: Checkout code
@@ -62,6 +60,7 @@ jobs:
           sudo apt-get install -y ovmf
 
           mkosi --debug vm -- -uuid $(uuidgen) > vm.log 2>&1 &
+          pid=$!
 
           success=0
           for try in {1..10}
@@ -88,7 +87,15 @@ jobs:
       - name: Remove symlinks
         run: find out/ -type l -delete
       - name: Compress artifacts
-        run: for file in out/mangos{,-installer}_*.raw out/mangos_*.efi ; do zstd --rm "$file" ; done
+        run: |
+          for file in out/mangos{,-installer}_*.raw out/mangos_*.efi ; do zstd --rm "$file" ; done
+          if ls out/docker_*.raw > /dev/null 2>&1
+          then
+              for file in out/docker_*.raw
+              do
+                  zstd --rm "$file"
+              done
+          fi
       - name: Upload build artifact (disk)
         id: upload-disk
         uses: actions/upload-artifact@v4
@@ -103,6 +110,7 @@ jobs:
             out/mangos_${{ env.IMAGE_VERSION }}.github.json
             out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos_${{ env.IMAGE_VERSION }}.syft.json
+            out/docker_${{ env.IMAGE_VERSION }}.raw.zst
           name: mangos.${{ matrix.profiles }}.disk
       - name: Upload build artifact (installer)
         uses: actions/upload-artifact@v4

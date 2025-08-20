@@ -1,0 +1,3 @@
+#!/bin/sh
+mkdir -p /usr/lib/extension-release.d
+echo EXTENSION_RELOAD_MANAGER=1 >> /usr/lib/extension-release.d/extension-release.docker_${IMAGE_VERSION}
