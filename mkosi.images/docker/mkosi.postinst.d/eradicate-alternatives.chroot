@@ -1,0 +1,41 @@
+#!/bin/sh
+
+# Ubuntu/Debian has an "alternatives" concept allowing multiple packages
+# to provide the same functionality. E.g. neovim and vim might both be
+# installed, but /usr/bin/vi can only refer to one of them. To do this,
+# /usr/bin/vi is a symlink to `/etc/alternatives/vi`, which in turn is
+# a symlink to the preferred implementation.
+#
+# This is problematic because /usr ceases to be self-contained and
+# behavior can change based on local modifications. Also, the symlinks
+# from the `bin` dirs are absolute, so if you mount the filesystem somewhere
+# for inspection/debugging, its symlinks will point to the host's `vi` (or
+# whatever). So:
+#
+# For every registered "alternative" with an identically named entry
+# point in /{usr,}/{s,}bin, replace the existing entry point, and replace it
+# with a relative symlink to whatever /etc/alternatives/ says it should be.
+
+for x in /etc/alternatives/*
+do
+        target="$(readlink $x)"
+        basename="$(basename $x)"
+        entrypoint="$(which $basename)"
+
+        if [ -z "${entrypoint}" ]
+        then
+                continue
+        fi
+
+        entrypointdir="$(dirname $entrypoint)"
+
+        if [ "$(readlink ${entrypoint})" != "${x}" ]
+        then
+                continue
+        fi
+
+        target="$(echo $target | sed -e s%^${entrypointdir}/%%)"
+
+        update-alternatives --remove-all $basename
+        ln -s $target "${entrypoint}"
+done
