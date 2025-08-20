@@ -161,7 +161,7 @@ jobs:
           mkdir release
 
           mv artifacts/mangos.verity-full,docker-ext.disk/* release/
-          mv artifacts/mangos.verity-full.installer/* release/
+          mv artifacts/mangos.verity-full,docker-ext.installer/* release/
           for f in artifacts/mangos.verity-full,docker.disk/* ; do
             mv "$f" "release/mangos+docker_$(basename $f | cut -f2- -d_)"
           done
