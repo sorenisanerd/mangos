@@ -8,7 +8,7 @@ jobs:
     strategy:
       matrix:
         profiles:
-          - verity-full
+          - verity-full,docker-ext
           - verity-full,docker
     runs-on: ubuntu-latest
     permissions:
@@ -106,7 +106,15 @@ jobs:
       - name: Remove symlinks
         run: find out/ -type l -delete
       - name: Compress artifacts
-        run: for file in out/mangos{,-installer}_*.raw out/mangos_*.efi; do zstd --rm "$file" ; done
+        run: |
+          for file in out/mangos{,-installer}_*.raw out/mangos_*.efi; do zstd --rm "$file" ; done
+          if ls out/docker_*.raw > /dev/null 2>&1
+          then
+              for file in out/docker_*.raw
+              do
+                  zstd --rm "$file"
+              done
+          fi
       - name: Sign artifacts
         run: for file in out/mangos* ; do cosign sign-blob -d -y --bundle "${file}.sigbundle" "${file}" > /dev/null; done
       - name: Upload build artifact (disk)
@@ -123,6 +131,7 @@ jobs:
             out/mangos_${{ env.IMAGE_VERSION }}.github.json
             out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos_${{ env.IMAGE_VERSION }}.syft.json
+            out/docker_${{ env.IMAGE_VERSION }}.raw.zst
           name: mangos.${{ matrix.profiles }}.disk
       - name: Upload build artifact (installer)
         uses: actions/upload-artifact@v4
@@ -151,8 +160,8 @@ jobs:
         run: |
           mkdir release
 
-          mv artifacts/mangos.verity-full.disk/* release/
-          mv artifacts/mangos.verity-full.installer/* release/
+          mv artifacts/mangos.verity-full,docker-ext.disk/* release/
+          mv artifacts/mangos.verity-full,docker-ext.installer/* release/
           for f in artifacts/mangos.verity-full,docker.disk/* ; do
             mv "$f" "release/mangos+docker_$(basename $f | cut -f2- -d_)"
           done
