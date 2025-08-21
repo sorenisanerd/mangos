@@ -1,0 +1,2 @@
+#!/bin/sh
+echo 'PORTABLE_PREFIXES="docker containerd"' >> /etc/os-release
