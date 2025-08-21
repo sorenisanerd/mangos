@@ -131,6 +131,7 @@ jobs:
             out/mangos_${{ env.IMAGE_VERSION }}.github.json
             out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos_${{ env.IMAGE_VERSION }}.syft.json
+            out/mangos_${{ env.IMAGE_VERSION }}.manifest
             out/docker_${{ env.IMAGE_VERSION }}.raw.zst
           name: mangos.${{ matrix.profiles }}.disk
       - name: Upload build artifact (installer)
