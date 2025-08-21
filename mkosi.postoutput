@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+echo "Merging base and main manifests" 
+
+jq -s '{config: .[0].config,
+        manifest_version: .[0].manifest_version,
+        packages: [.[].packages[]] | sort_by(.name)}' ${SRCDIR}/out/base_${IMAGE_VERSION}.manifest ${OUTPUTDIR}/mangos_${IMAGE_VERSION}.manifest > ${OUTPUTDIR}/main+base.manifest
+
+mv ${OUTPUTDIR}/main+base.manifest ${OUTPUTDIR}/mangos_${IMAGE_VERSION}.manifest
