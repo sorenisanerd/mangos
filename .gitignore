@@ -8,3 +8,5 @@
 /pkg
 /mkosi.packages
 /gpg
+mkosi.local
+mkosi.local.conf
