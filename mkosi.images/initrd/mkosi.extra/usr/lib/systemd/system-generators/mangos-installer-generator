@@ -11,7 +11,7 @@ then
         exit 0
 fi
 
-default="$(systemctl get-default)"
+default="initrd.target"
 
 mkdir -p "${outdir}/${default}.wants"
 ln -s /usr/lib/systemd/system/mangos-install.service "${outdir}/${default}.wants/mangos-install.service"
