@@ -1,6 +1,8 @@
 #!/bin/sh
 export SYFT_CHECK_FOR_APP_UPDATE=0
 
+IMAGE_ID="$(jq -r < $MKOSI_CONFIG '.Output' | cut -f1 -d_)"
+
 if [ -n "${SUBIMAGE}" ]
 then
 	NAME="${IMAGE_ID}-${SUBIMAGE}"

@@ -107,14 +107,11 @@ jobs:
         run: find out/ -type l -delete
       - name: Compress artifacts
         run: |
-          for file in out/mangos{,-installer}_*.raw out/mangos_*.efi; do zstd --rm "$file" ; done
-          if ls out/docker_*.raw > /dev/null 2>&1
-          then
-              for file in out/docker_*.raw
-              do
-                  zstd --rm "$file"
-              done
-          fi
+          shopt -s nullglob
+          for file in out/mangos{,-installer}_${IMAGE_VERSION}.{raw,efi} out/docker*_${IMAGE_VERSION}.raw
+          do
+              zstd --rm "$file"
+          done
       - name: Sign artifacts
         run: for file in out/mangos* ; do cosign sign-blob -d -y --bundle "${file}.sigbundle" "${file}" > /dev/null; done
       - name: Upload build artifact (disk)
@@ -132,18 +129,13 @@ jobs:
             out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos_${{ env.IMAGE_VERSION }}.syft.json
             out/mangos_${{ env.IMAGE_VERSION }}.manifest
-            out/docker_${{ env.IMAGE_VERSION }}.raw.zst
-          name: mangos.${{ matrix.profiles }}.disk
-      - name: Upload build artifact (installer)
-        uses: actions/upload-artifact@v4
-        with:
-          path: |
+            out/docker*_${{ env.IMAGE_VERSION }}.raw.zst
             out/mangos-installer_${{ env.IMAGE_VERSION }}.raw.zst
             out/mangos-installer_${{ env.IMAGE_VERSION }}.cyclonedx.json
             out/mangos-installer_${{ env.IMAGE_VERSION }}.github.json
             out/mangos-installer_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos-installer_${{ env.IMAGE_VERSION }}.syft.json
-          name: mangos.${{ matrix.profiles }}.installer
+          name: mangos.${{ matrix.profiles }}
 
   release:
     if: github.ref_type == 'tag'
@@ -161,9 +153,8 @@ jobs:
         run: |
           mkdir release
 
-          mv artifacts/mangos.verity-full,docker-ext.disk/* release/
-          mv artifacts/mangos.verity-full,docker-ext.installer/* release/
-          for f in artifacts/mangos.verity-full,docker.disk/* ; do
+          mv artifacts/mangos.verity-full,docker-ext/* release/
+          for f in artifacts/mangos.verity-full,docker/* ; do
             mv "$f" "release/mangos+docker_$(basename $f | cut -f2- -d_)"
           done
       - name: Release
