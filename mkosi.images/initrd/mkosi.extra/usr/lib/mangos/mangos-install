@@ -1,8 +1,10 @@
 #!/bin/sh
 
-echo=
+if [ -z "${KERNEL_CMDLINE}" ]
+then
+    KERNEL_CMDLINE="$(cat /proc/cmdline)"
+fi
 
-case "$1" in
         -h|--help)
                 echo 'usage: mangos-install [BLOCK_DEVICE|ask]'
                 echo
