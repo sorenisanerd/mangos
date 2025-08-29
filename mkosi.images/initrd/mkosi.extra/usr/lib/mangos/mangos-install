@@ -60,3 +60,27 @@ then
     DOWNLOAD_URL="${MANGOS_GITHUB_URL}/releases/download/v${IMAGE_VERSION}/mangos_${IMAGE_VERSION}.raw.zst"
 fi
 
+$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw "${DOWNLOAD_URL}" "$install_target"
+
+$echo sgdisk -p "${install_target}"
+$echo sgdisk -v "${install_target}"
+# -e: There are two copies of the GPT on a block device. One at the
+#     start and one at the end. Since the image and the device are
+#     unlikely to be the exact same size, we need to put a new copy at
+#     the end.
+# -U: Set disk GUID
+$echo sgdisk -e \
+    -U "$(systemd-id128 new -u)" \
+    -u "1:$(systemd-id128 new -u)" \
+    -p "${install_target}" \
+
+$echo sgdisk -v "${install_target}"
+sync ; sync
+
+mount "${install_target}5" /mnt
+mount "${install_target}1" /mnt/boot
+touch /dev/shm/entry-token
+mount -o bind /dev/shm/entry-token /mnt/etc/kernel/entry-token
+bootctl install --root=/mnt --variables=yes
+umount /mnt/etc/kernel/entry-token
+sync ; sync
