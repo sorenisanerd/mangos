@@ -11,3 +11,5 @@ Type=oneshot
 StandardInput=tty-force
 ExecStartPre=systemctl start systemd-networkd-wait-routable
 ExecStart=/usr/lib/mangos/mangos-install
+LoadCredential=mangos_install_source
+LoadCredential=mangos_install_target

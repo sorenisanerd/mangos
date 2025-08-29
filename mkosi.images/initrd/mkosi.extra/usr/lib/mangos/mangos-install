@@ -1,9 +1,13 @@
 #!/bin/sh
 
+DOWNLOAD_URL="$(systemd-creds cat mangos_install_source 2> /dev/null)"
+
 if [ -z "${KERNEL_CMDLINE}" ]
 then
     KERNEL_CMDLINE="$(cat /proc/cmdline)"
 fi
+
+install_target="$(systemd-creds cat mangos_install_target 2> /dev/null)"
 
 while [ $# -gt 0 ]
 do
