@@ -14,7 +14,7 @@ fi
 default="$(systemctl get-default)"
 
 mkdir -p "${outdir}/${default}.wants"
-ln -s ../mangos-install.service "${outdir}/${default}.wants/mangos-install.service"
+ln -s /usr/lib/systemd/system/mangos-install.service "${outdir}/${default}.wants/mangos-install.service"
 
 target="$(sed -e 's%.*mangos_install_target=\([a-z0-9/:.-]\+\).*%\1%' /proc/cmdline)"
 if [ "$target" = "ask" ]
