@@ -64,7 +64,9 @@ jobs:
         env:
           profiles: ${{ matrix.profiles }}
           MANGOS_GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}
-        run: mkosi --debug --profile="${profiles}"
+        run: |
+          mkosi --debug --profile= --profile="${profiles}"
+          mkosi --debug --profile= --profile="${profiles},installer"
       - name: List built artifacts
         run: find out/
       - name: Export image version for later steps
