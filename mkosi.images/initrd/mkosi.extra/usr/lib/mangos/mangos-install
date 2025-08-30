@@ -1,24 +1,51 @@
 #!/bin/sh
 
-echo=
+DOWNLOAD_URL="$(systemd-creds cat mangos_install_source 2> /dev/null)"
 
-case "$1" in
+if [ -z "${KERNEL_CMDLINE}" ]
+then
+    KERNEL_CMDLINE="$(cat /proc/cmdline)"
+fi
+
+install_target="$(systemd-creds cat mangos_install_target 2> /dev/null)"
+
+while [ $# -gt 0 ]
+do
+    case "$1" in
         -h|--help)
-                echo 'usage: mangos-install [BLOCK_DEVICE|ask]'
-                echo
-                echo 'Downloads and installs MANGOS onto BLOCK_DEVICE.'
-                echo
-                echo 'If called without arguments or with a single argument "ask",'
-                echo 'a dialog will be presented with a list of detected block devices.'
-                exit 0
-                ;;
+            echo 'usage: mangos-install [BLOCK_DEVICE|ask]'
+            echo
+            echo 'Downloads and installs MANGOS onto BLOCK_DEVICE.'
+            echo
+            echo 'If called without arguments or with a single argument "ask",'
+            echo 'a dialog will be presented with a list of detected block devices.'
+            exit 0
+            ;;
+        -s)
+            DOWNLOAD_URL="$2"
+            shift 2
+            ;;
         -n|--dry-run)
-                echo="/bin/echo --"
-                shift
-                ;;
-esac
+            echo="/bin/echo --"
+            shift
+            ;;
+        *)
+            install_target=$1
+            shift
+            ;;
+    esac
+done
 
-install_target="${1:-ask}"
+if [ -z "${install_target}" ]
+then
+    target="$(sed -e 's%.*mangos_install_target=\([a-z0-9/:.-]\+\).*%\1%' /proc/cmdline)"
+    if [ -n "${target}" ]
+    then
+        install_target="${target}"
+    fi
+fi
+
+install_target="${install_target:-ask}"
 
 if [ "${install_target}" = "ask" ]
 then
@@ -30,12 +57,34 @@ then
         install_target="$(cat /tmp/mangos_install_target ; rm /tmp/mangos_install_target)"
 fi
 
-. /etc/os-release
+if [ -z "${DOWNLOAD_URL}" ]
+then
+    . /etc/os-release
 
-$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw ${MANGOS_GITHUB_URL}/releases/download/v${IMAGE_VERSION}/mangos_${IMAGE_VERSION}.raw.zst "$install_target"
+    DOWNLOAD_URL="${MANGOS_GITHUB_URL}/releases/download/v${IMAGE_VERSION}/mangos_${IMAGE_VERSION}.raw.zst"
+fi
 
-# There are two copies of the GPT on a block device. One at the start
-# and one at the end. Since the image and the device are unlikely to
-# be the exact same size, we need to put a new copy at the end.
-$echo sgdisk -e "${install_target}"
+$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw "${DOWNLOAD_URL}" "$install_target"
 
+$echo sgdisk -p "${install_target}"
+$echo sgdisk -v "${install_target}"
+# -e: There are two copies of the GPT on a block device. One at the
+#     start and one at the end. Since the image and the device are
+#     unlikely to be the exact same size, we need to put a new copy at
+#     the end.
+# -U: Set disk GUID
+$echo sgdisk -e \
+    -U "$(systemd-id128 new -u)" \
+    -u "1:$(systemd-id128 new -u)" \
+    -p "${install_target}" \
+
+$echo sgdisk -v "${install_target}"
+sync ; sync
+
+mount "${install_target}5" /mnt
+mount "${install_target}1" /mnt/boot
+touch /dev/shm/entry-token
+mount -o bind /dev/shm/entry-token /mnt/etc/kernel/entry-token
+bootctl install --root=/mnt --variables=yes
+umount /mnt/etc/kernel/entry-token
+sync ; sync

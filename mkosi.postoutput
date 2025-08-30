@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "Merging base and main manifests" 
+echo "Merging base and main manifests"
 
 jq -s '{config: .[0].config,
         manifest_version: .[0].manifest_version,
