@@ -73,8 +73,8 @@ jobs:
           do
               zstd --rm "$file"
           done
-      - name: Sign artifacts
-        run: for file in out/mangos* ; do cosign sign-blob -d -y --bundle "${file}.sigbundle" "${file}" > /dev/null; done
+#      - name: Sign artifacts
+#        run: for file in out/mangos* ; do cosign sign-blob -d -y --bundle "${file}.sigbundle" "${file}" > /dev/null; done
       - name: Upload build artifact (disk)
         id: upload-disk
         uses: actions/upload-artifact@v4
