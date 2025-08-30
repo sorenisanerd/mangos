@@ -31,4 +31,5 @@ cat << EOF > "${outdir}/mangos-install.service.d/target-device.conf"
 
 [Unit]
 Requires=${unit}
+After=${unit}
 EOF
