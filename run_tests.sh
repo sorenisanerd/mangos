@@ -1,7 +1,40 @@
 #!/bin/bash
 
 set -e
-set -x
+
+green() {
+    echo -ne "\033[0;32m$*\033[0m"
+}
+
+red() {
+    echo -ne "\033[0;31m$*\033[0m"
+}
+
+bold() {
+    echo -ne "\033[1m$*\033[0m"
+}
+
+step() {
+    bold " > ${*}... "
+}
+
+success() {
+    green "Success"
+    echo
+}
+
+failure() {
+    red "Failure"
+    echo
+}
+
+report_outcome() {
+    if [ $? -eq 0 ]; then
+        success
+    else
+        failure
+    fi
+}
 
 cols=120
 rows=40
@@ -9,11 +42,11 @@ rows=40
 build=0
 testid=$$
 
-asciiname_rec=""
+asciinema_rec=""
 
 if which asciinema > /dev/null 2>&1
 then
-        asciiname_rec="asciinema rec --append --cols ${cols} --rows ${rows} mangos-${testid}.acast -c"
+        asciinema_rec="asciinema rec --append --cols ${cols} --rows ${rows} mangos-${testid}.acast -c"
 fi
 
 
@@ -37,7 +70,7 @@ do
             shift
             ;;
         --no-asciinema)
-            asciiname_rec=""
+            asciinema_rec=""
             shift
             ;;
     esac
@@ -55,10 +88,11 @@ fi
 slice="mangos-test-${testid}.slice"
 systemd_run="systemd-run --user --slice ${slice}"
 
-trap "echo exit code: $?; systemctl --user stop mangos-test-${testid}.slice; journalctl --user -u ${slice}" EXIT
+trap "echo exit code: $?; systemctl --user stop mangos-test-${testid}.slice; journalctl --no-pager --user -u ${slice}" EXIT
 
-echo 'Launch web server (mkosi serve)'
-$systemd_run -u "mangos-test-${testid}-serve" -d -- mkosi serve
+step 'Launch web server (mkosi serve)'
+$systemd_run -u "mangos-test-${testid}-serve" -q -d -- mkosi serve
+report_outcome
 
 tmpdir="$(mktemp -d)"
 cp /usr/share/OVMF/OVMF_VARS_4M.fd "${tmpdir}/efivars.fd"
@@ -66,12 +100,13 @@ cp /usr/share/OVMF/OVMF_VARS_4M.fd "${tmpdir}/efivars.fd"
 tpmdir="${tmpdir}/tpm"
 mkdir -p "${tpmdir}"
 
-echo Prepping the TPM
-$systemd_run -u "mangos-test-${testid}-tpm-prep" -d --wait -- \
+step "Prepping the TPM"
+$systemd_run -u "mangos-test-${testid}-tpm-prep" -q -d --wait -- \
     mkosi sandbox -- \
     swtpm_setup --tpm-state "${tpmdir}" \
         --tpm2 --pcr-banks sha256 \
         --display --config /dev/null
+report_outcome
 
 # Create a uuid for the VM's serial. It's used to generate the machine id.
 # The machine ID is in turn used to generate partition UUID's for swap,
@@ -91,8 +126,9 @@ target_disk="${tmpdir}/target_disk.raw"
 # /var/tmp: 4G minimum
 # /var: 4G minimum
 # Total: ~17.6GB
-echo Creating target disk
-mkosi sandbox -- qemu-img create "${target_disk}" 20G
+step Creating target disk
+$systemd_run -q -- mkosi sandbox -- qemu-img create "${target_disk}" 20G
+report_outcome
 
 run() {
     qemu_args=""
@@ -123,7 +159,7 @@ run() {
         esac
     done
 
-    $systemd_run -u "mangos-test-${testid}-swtpm" -d -- \
+    $systemd_run -u "mangos-test-${testid}-swtpm" -q -d -- \
         mkosi sandbox -- \
         swtpm socket --tpmstate dir="${tpmdir}" --ctrl type=unixio,path="${tmpdir}/swtpm-sock" --tpm2
 
@@ -172,27 +208,30 @@ mkosi sandbox -- \
 EOF
     chmod +x "${script}"
 
-    $systemd_run -u "mangos-test-${testid}-qemu" -d -E TERM=xterm-256color ${sdrun_args} -- \
-        ${asciiname_rec} "${script}"
+    $systemd_run -u "mangos-test-${testid}-qemu" -q -d -E TERM=xterm-256color ${sdrun_args} -- \
+        ${asciinema_rec} "${script}"
     sleep 2
 }
 
 IMAGE_VERSION="$(mkosi summary --json | jq .Images[0].ImageVersion -r)"
 installer="$(pwd)/out/mangos-installer_${IMAGE_VERSION}.raw"
 
-echo 'Run VM (Secure Boot enrollment)'
+step 'Run VM (Secure Boot enrollment)'
 run --blockdev=installer:"${installer}" \
     --blockdev=persistent:"${target_disk}" --wait
+report_outcome
 
-echo 'Run VM (install mangos)'
+step 'Run VM (install mangos)'
 run -smbios type=11,value=io.systemd.credential:mangos_install_target=/dev/vdb \
     -smbios type=11,value=io.systemd.credential:mangos_install_source=http://10.0.2.2:8081/mangos_${IMAGE_VERSION}.raw \
     --blockdev=installer:"${installer}" \
     --blockdev=persistent:"${target_disk}" --wait
+report_outcome
 
 # Run/test
-echo 'Run installed OS'
+step 'Launch installed OS'
 run --blockdev=persistent:"${target_disk}"
+report_outcome
 
 cat <<'EOF' > "${tmpdir}/is_ready.sh"
 #!/bin/sh
@@ -205,18 +244,22 @@ EOF
 chmod +x "${tmpdir}/is_ready.sh"
 
 # Exit status 130 means killed by signal 2 (SIGINT)
-echo 'Waiting for installed OS to be ready...'
-$systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 --wait -- mkosi --debug sandbox -- socat VSOCK-LISTEN:23433,fork,socktype=5 EXEC:"${tmpdir}/is_ready.sh"
-echo $?
+step 'Waiting for installed OS to be ready'
+$systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --wait -- mkosi --debug sandbox -- socat VSOCK-LISTEN:23433,fork,socktype=5 EXEC:"${tmpdir}/is_ready.sh"
+report_outcome
 
-echo ssh into VM
-if ! ssh -i ./mkosi.key \
+step ssh into VM
+if $systemd_run -d --wait -q -- ssh -i ./mkosi.key \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
     -o LogLevel=ERROR \
     -o ProxyCommand="mkosi sandbox -- socat - VSOCK-CONNECT:42:%p" \
     root@mkosi echo Test succesful
 then
-    echo Fail
+    success
+    $systemd_run -u "mangos-test-${testid}-result" -q -- echo "Mangos test ${testid} succeeded"
+else
+    failure
+    $systemd_run -u "mangos-test-${testid}-result" -q -- echo "Mangos test ${testid} failed"
     exit 1
 fi
