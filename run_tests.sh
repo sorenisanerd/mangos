@@ -131,11 +131,9 @@ run() {
     sleep 3
 
     script="${tmpdir}/script.sh"
-    echo '#!/bin/sh' > "${script}"
-    chmod +x "${script}"
-
-    cat <<EOF >> "${script}"
-    mkosi sandbox -- \
+    cat <<-EOF > "${script}"
+#!/bin/sh
+mkosi sandbox -- \
         qemu-system-x86_64 \
         -no-reboot \
         -machine type=q35,smm=on,hpet=off \
@@ -172,6 +170,7 @@ run() {
         -smbios type=11,value=io.systemd.boot.kernel-cmdline-extra='systemd.wants=network.target module_blacklist=vmw_vmci systemd.tty.term.hvc0=xterm-256color systemd.tty.columns.hvc0=${cols} systemd.tty.rows.hvc0=${rows} ip=enc0:any ip=enp0s1:any ip=enp0s2:any ip=host0:any ip=none loglevel=4 SYSTEMD_SULOGIN_FORCE=1 systemd.tty.term.console=xterm-256color systemd.tty.columns.console=${cols} systemd.tty.rows.console=${rows} console=hvc0 TERM=xterm-256color' \
         -device vhost-vsock-pci,guest-cid=42
 EOF
+    chmod +x "${script}"
 
     $systemd_run -u "mangos-test-${testid}-qemu" -d -E TERM=xterm-256color ${sdrun_args} -- \
         ${asciiname_rec} "${script}"
