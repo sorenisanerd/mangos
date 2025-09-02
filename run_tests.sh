@@ -36,6 +36,10 @@ do
             bumparg=-B
             shift
             ;;
+        --no-asciinema)
+            asciiname_rec=""
+            shift
+            ;;
     esac
 done
 
