@@ -127,7 +127,7 @@ target_disk="${tmpdir}/target_disk.raw"
 # /var: 4G minimum
 # Total: ~17.6GB
 step Creating target disk
-$systemd_run -q --wait -- mkosi sandbox -- qemu-img create "${target_disk}" 20G
+$systemd_run -q -d --wait -- mkosi sandbox -- qemu-img create "${target_disk}" 20G
 report_outcome
 
 run() {
