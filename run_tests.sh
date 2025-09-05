@@ -249,12 +249,20 @@ $systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --w
 report_outcome
 
 step ssh into VM
-if $systemd_run -d --wait -q -- ssh -i ./mkosi.key \
+if $systemd_run -d --wait -P -q -- ssh -i ./mkosi.key \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
     -o LogLevel=ERROR \
     -o ProxyCommand="mkosi sandbox -- socat - VSOCK-CONNECT:42:%p" \
-    root@mkosi echo Test succesful
+    root@mkosi <<'EOF'
+set -e
+set -x
+
+systemctl is-active systemd-veritysetup@root.service
+systemctl is-active systemd-cryptsetup@swap.service
+systemctl is-active systemd-cryptsetup@var.service
+systemctl is-active systemd-cryptsetup@var\\x2dtmp.service
+EOF
 then
     success
     $systemd_run -u "mangos-test-${testid}-result" -q -- echo "Mangos test ${testid} succeeded"
