@@ -8,5 +8,6 @@
 /pkg
 /mkosi.packages
 /gpg
+/*.acast
 mkosi.local
 mkosi.local.conf
