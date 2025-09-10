@@ -6,7 +6,11 @@ To activate the installer, pass `mangos_install_target=ARG` on the kernel comman
 
  `ARG` can be either the name of a block device or the static string `ask`. Block devices can be specified as e.g. simply `/dev/sda`, but it's generally better to use the `/dev/disk/by-*` hierarchy to benefit from consistently named block devices. `mangos-installer-generator` will add `Requires=<target device>`  and `After=<target device>` to `mangos-install.service`.
 
-If `ARG` is set to `ask`, a simple dialog will be shown listing all the detected block devices. Since the target device is not known ahead of time, no device specific `Requires=` or `After=` dependency can be added.
+If `ARG` is set to `ask`, a simple dialog will be shown listing all the detected block devices.
+
+[![Installer screenshot](./installer.png)](./installer.png)
+
+Since the target device is not known ahead of time, no device specific `Requires=` or `After=` dependency can be added.
 
 Once the target has been identified/selected, the installer streams the disk image from Github to the target device, decompressing it on the fly. The image is written directly to the block device, so **ALL** existing data on the device will be lost.
 
