@@ -32,7 +32,7 @@ done
 
 if [ -z "${install_target}" ]
 then
-    target="$(sed -e 's%.*mangos_install_target=\([a-z0-9/:.-]\+\).*%\1%' /proc/cmdline)"
+    target="$(sed -e 's%.*mangos_install_target=\([^ ]\+\).*%\1%' /proc/cmdline)"
     if [ -n "${target}" ]
     then
         install_target="${target}"
