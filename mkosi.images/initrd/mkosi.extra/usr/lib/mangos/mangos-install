@@ -86,6 +86,13 @@ sync ; sync
 
 mount "${install_target}5" /mnt
 mount "${install_target}1" /mnt/boot
+
+# Add ip= kernel arg to grub config
+ip_arg="$(grep -oE 'ip=[^ ]+' /proc/cmdline)"
+nameserver_arg="$(grep -oE 'nameserver=[^ ]+' /proc/cmdline)"
+
+sed -e "s%^.*linux .*%& ${ip_arg} ${nameserver_arg}%g" -i /mnt/boot/grub/grub.cfg
+
 touch /dev/shm/entry-token
 mount -o bind /dev/shm/entry-token /mnt/etc/kernel/entry-token
 bootctl install --root=/mnt --variables=yes
