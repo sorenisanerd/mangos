@@ -1,12 +1,6 @@
 #!/bin/sh
 
-DOWNLOAD_URL="$(systemd-creds cat mangos_install_source 2> /dev/null)"
-
-if [ -z "${KERNEL_CMDLINE}" ]
-then
-    KERNEL_CMDLINE="$(cat /proc/cmdline)"
-fi
-
+install_source="$(systemd-creds cat mangos_install_source 2> /dev/null)"
 install_target="$(systemd-creds cat mangos_install_target 2> /dev/null)"
 
 while [ $# -gt 0 ]
@@ -22,7 +16,7 @@ do
             exit 0
             ;;
         -s)
-            DOWNLOAD_URL="$2"
+            install_source="$2"
             shift 2
             ;;
         -n|--dry-run)
@@ -57,14 +51,23 @@ then
         install_target="$(cat /tmp/mangos_install_target ; rm /tmp/mangos_install_target)"
 fi
 
-if [ -z "${DOWNLOAD_URL}" ]
+if [ -z "${install_source}" ]
+then
+    source="$(sed -e 's%.*mangos_install_source=\([^ ]\+\).*%\1%' /proc/cmdline)"
+    if [ -n "${source}" ]
+    then
+        install_source="${source}"
+    fi
+fi
+
+if [ -z "${install_source}" ]
 then
     . /etc/os-release
 
-    DOWNLOAD_URL="${MANGOS_GITHUB_URL}/releases/download/v${IMAGE_VERSION}/mangos_${IMAGE_VERSION}.raw.zst"
+    install_source="${MANGOS_GITHUB_URL}/releases/download/v${IMAGE_VERSION}/mangos_${IMAGE_VERSION}.raw.zst"
 fi
 
-$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw "${DOWNLOAD_URL}" "$install_target"
+$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw "${install_source}" "$install_target"
 
 $echo sgdisk -p "${install_target}"
 $echo sgdisk -v "${install_target}"
