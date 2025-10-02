@@ -97,4 +97,6 @@ touch /dev/shm/entry-token
 mount -o bind /dev/shm/entry-token /mnt/etc/kernel/entry-token
 bootctl install --root=/mnt --variables=yes
 umount /mnt/etc/kernel/entry-token
+umount /mnt/boot
+umount /mnt
 sync ; sync
