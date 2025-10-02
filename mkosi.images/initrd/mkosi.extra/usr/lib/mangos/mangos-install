@@ -43,7 +43,7 @@ install_target="${install_target:-ask}"
 
 if [ "${install_target}" = "ask" ]
 then
-        if ! lsblk -p -o TYPE,NAME,VENDOR,MODEL,SERIAL -l | grep ^disk | cut -f2- -d' ' | sed -e 's/ \+/ /g' | while read bdev info; do /bin/echo -e "$bdev\0$info\0" ; done | tr -d '\n' | xargs -0 whiptail --menu "Install target" 15 50 0 2> /tmp/mangos_install_target
+        if ! lsblk -p -o TYPE,NAME,SIZE,VENDOR,MODEL,SERIAL -l | grep ^disk | cut -f2- -d' ' | sed -e 's/ \+/ /g' | while read bdev info; do /bin/echo -e "$bdev\x00$info\x00" ; done | tr -d '\n' | xargs -0 whiptail --menu "Install target" 15 50 0 2> /tmp/mangos_install_target
         then
                 echo "Install cancelled"
                 exit 1
