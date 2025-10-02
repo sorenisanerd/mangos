@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 echo "Merging base and main manifests"
@@ -8,3 +8,6 @@ jq -s '{config: .[0].config,
         packages: [.[].packages[]] | sort_by(.name)}' ${SRCDIR}/out/base_${IMAGE_VERSION}.manifest ${OUTPUTDIR}/mangos_${IMAGE_VERSION}.manifest > ${OUTPUTDIR}/main+base.manifest
 
 mv ${OUTPUTDIR}/main+base.manifest ${OUTPUTDIR}/mangos_${IMAGE_VERSION}.manifest
+
+shopt -s nullglob
+cat "${OUTPUTDIR}"/*.SHA256SUMS "${SRCDIR}"/out/*.SHA256SUMS > "${OUTPUTDIR}"/SHA256SUMS
