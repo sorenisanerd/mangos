@@ -1,12 +1,6 @@
 #!/bin/sh
 
-DOWNLOAD_URL="$(systemd-creds cat mangos_install_source 2> /dev/null)"
-
-if [ -z "${KERNEL_CMDLINE}" ]
-then
-    KERNEL_CMDLINE="$(cat /proc/cmdline)"
-fi
-
+install_source="$(systemd-creds cat mangos_install_source 2> /dev/null)"
 install_target="$(systemd-creds cat mangos_install_target 2> /dev/null)"
 
 while [ $# -gt 0 ]
@@ -22,7 +16,7 @@ do
             exit 0
             ;;
         -s)
-            DOWNLOAD_URL="$2"
+            install_source="$2"
             shift 2
             ;;
         -n|--dry-run)
@@ -38,7 +32,7 @@ done
 
 if [ -z "${install_target}" ]
 then
-    target="$(sed -e 's%.*mangos_install_target=\([a-z0-9/:.-]\+\).*%\1%' /proc/cmdline)"
+    target="$(sed -e 's%.*mangos_install_target=\([^ ]\+\).*%\1%' /proc/cmdline)"
     if [ -n "${target}" ]
     then
         install_target="${target}"
@@ -49,7 +43,7 @@ install_target="${install_target:-ask}"
 
 if [ "${install_target}" = "ask" ]
 then
-        if ! lsblk -p -o TYPE,NAME,VENDOR,MODEL,SERIAL -l | grep ^disk | cut -f2- -d' ' | sed -e 's/ \+/ /g' | while read bdev info; do /bin/echo -e "$bdev\0$info\0" ; done | tr -d '\n' | xargs -0 whiptail --menu "Install target" 15 50 0 2> /tmp/mangos_install_target
+        if ! lsblk -p -o TYPE,NAME,SIZE,VENDOR,MODEL,SERIAL -l | grep ^disk | cut -f2- -d' ' | sed -e 's/ \+/ /g' | while read bdev info; do /bin/echo -e "$bdev\x00$info\x00" ; done | tr -d '\n' | xargs -0 whiptail --menu "Install target" 15 50 0 2> /tmp/mangos_install_target
         then
                 echo "Install cancelled"
                 exit 1
@@ -57,14 +51,23 @@ then
         install_target="$(cat /tmp/mangos_install_target ; rm /tmp/mangos_install_target)"
 fi
 
-if [ -z "${DOWNLOAD_URL}" ]
+if [ -z "${install_source}" ]
+then
+    source="$(sed -e 's%.*mangos_install_source=\([^ ]\+\).*%\1%' /proc/cmdline)"
+    if [ -n "${source}" ]
+    then
+        install_source="${source}"
+    fi
+fi
+
+if [ -z "${install_source}" ]
 then
     . /etc/os-release
 
-    DOWNLOAD_URL="${MANGOS_GITHUB_URL}/releases/download/v${IMAGE_VERSION}/mangos_${IMAGE_VERSION}.raw.zst"
+    install_source="${MANGOS_GITHUB_URL}/releases/download/v${IMAGE_VERSION}/mangos_${IMAGE_VERSION}.raw.zst"
 fi
 
-$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw "${DOWNLOAD_URL}" "$install_target"
+$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw "${install_source}" "$install_target"
 
 $echo sgdisk -p "${install_target}"
 $echo sgdisk -v "${install_target}"
@@ -83,8 +86,17 @@ sync ; sync
 
 mount "${install_target}5" /mnt
 mount "${install_target}1" /mnt/boot
+
+# Add ip= kernel arg to grub config
+ip_arg="$(grep -oE 'ip=[^ ]+' /proc/cmdline)"
+nameserver_arg="$(grep -oE 'nameserver=[^ ]+' /proc/cmdline)"
+
+sed -e "s%^.*linux .*%& ${ip_arg} ${nameserver_arg}%g" -i /mnt/boot/grub/grub.cfg
+
 touch /dev/shm/entry-token
 mount -o bind /dev/shm/entry-token /mnt/etc/kernel/entry-token
 bootctl install --root=/mnt --variables=yes
 umount /mnt/etc/kernel/entry-token
+umount /mnt/boot
+umount /mnt
 sync ; sync

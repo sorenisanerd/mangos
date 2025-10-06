@@ -22,7 +22,7 @@ then
         exit 0
 fi
 
-unit="$(systemd-escape ${target}).device"
+unit="$(systemd-escape ${target#/}).device"
 
 mkdir -p "${outdir}/mangos-install.service.d"
 

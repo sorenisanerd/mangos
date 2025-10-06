@@ -1,0 +1,27 @@
+#!/bin/sh
+
+kver=$(basename ${BUILDROOT}/usr/lib/modules/*)
+initrd=$(basename $(jq -C .Initrds[0] < ${MKOSI_CONFIG} -r))
+
+# Use IMAGE_VERSION for kernel's filename. Blame sd-sysupdate.
+mv ${BUILDROOT}/boot/mangos/${kver}/vmlinuz ${BUILDROOT}/boot/mangos-${IMAGE_VERSION}.vmlinuz
+
+# Combine microcode and initrd and call it a day
+cat ${BUILDROOT}/boot/mangos/microcode.initrd ${BUILDROOT}/boot/mangos/${initrd} > ${BUILDROOT}/boot/mangos-${IMAGE_VERSION}.initrd
+
+# There's so much extra stuff in /boot we don't need. 
+rm -rf ${BUILDROOT}/boot/mangos/microcode.initrd ${BUILDROOT}/boot/mangos/${initrd} ${BUILDROOT}/boot/vmlinuz-* ${BUILDROOT}/boot/mangos/${kver}
+
+# Menuentries in grub.cfg have with the kernel version in their id by default.
+# Since our entries often use the same kernel (but different roothash), we put
+# the IMAGE_VERSION in the menuentry id instead.
+# Also accomodate the renamed kernel and initrd.
+# Finally, add \${kernel_args} to the linux line.
+sed -e 's/menuentry.*"/menuentry "mangos-'${IMAGE_VERSION}'"/g' \
+    -e 's@^[      ]*linux [^ ]*@    linux /mangos-'${IMAGE_VERSION}'.vmlinuz@g' \
+    -e 's@^[      ]*linux .*@& ${kernel_args}@' \
+    -e 's@^[      ]*initrd .*@    initrd /mangos-'${IMAGE_VERSION}'.initrd@' \
+    -i ${BUILDROOT}/efi/grub/grub.cfg
+
+cp ${BUILDROOT}/efi/grub/grub.cfg ${OUTPUTDIR}/${IMAGE_ID}_${IMAGE_VERSION}.grub.cfg
+
