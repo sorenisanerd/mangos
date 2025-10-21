@@ -1,0 +1,14 @@
+{{- $credsDir := env "CREDENTIALS_DIRECTORY" -}}
+{{- $csrPath := "" -}}
+{{- if $credsDir -}}
+{{-   $csrPath = (printf "%s/mangos.csr" $credsDir) -}}
+{{- else -}}
+{{-   $csrPath = printf "/var/lib/mangos/mangos.csr" -}}
+{{- end -}}
+{{- $csr := file $csrPath -}}
+{{- $hostname := env "HOSTNAME" -}}
+{{- with pkiCert "node-cert/sign/node-cert-self"
+        (printf "common_name=%s" $hostname)
+        (printf "csr=%s" $csr) -}}
+{{-   .Cert -}}
+{{- end -}}

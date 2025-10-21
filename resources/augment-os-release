@@ -1,2 +1,3 @@
 #!/bin/sh
 echo MANGOS_GITHUB_URL="${MANGOS_GITHUB_URL}" >> ${BUILDROOT}/usr/lib/os-release
+echo MKOSI_SERVE_URL="${MKOSI_SERVE_URL}" >> ${BUILDROOT}/usr/lib/os-release

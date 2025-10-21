@@ -79,7 +79,7 @@ done
 if [ "${build}" = 1 ]
 then
     echo Building mangos
-    mkosi -f ${bumparg}
+    mkosi -f --profile=hashistack ${bumparg}
 
     echo Building installer
     mkosi --profile=installer -f
@@ -243,18 +243,7 @@ exit 0
 EOF
 chmod +x "${tmpdir}/is_ready.sh"
 
-# Exit status 130 means killed by signal 2 (SIGINT)
-step 'Waiting for installed OS to be ready'
-$systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --wait -- mkosi --debug sandbox -- socat VSOCK-LISTEN:23433,fork,socktype=5 EXEC:"${tmpdir}/is_ready.sh"
-report_outcome
-
-step ssh into VM
-if $systemd_run -d --wait -P -q -- ssh -i ./mkosi.key \
-    -o UserKnownHostsFile=/dev/null \
-    -o StrictHostKeyChecking=no \
-    -o LogLevel=ERROR \
-    -o ProxyCommand="mkosi sandbox -- socat - VSOCK-CONNECT:42:%p" \
-    root@mkosi <<'EOF'
+cat <<'EOF' > "${tmpdir}/test_script.sh"
 set -e
 set -x
 
@@ -262,7 +251,23 @@ systemctl is-active systemd-veritysetup@root.service
 systemctl is-active systemd-cryptsetup@swap.service
 systemctl is-active systemd-cryptsetup@var.service
 systemctl is-active systemd-cryptsetup@var\\x2dtmp.service
+mangosctl bootstrap
+
 EOF
+chmod +x "${tmpdir}/test_script.sh"
+
+# Exit status 130 means killed by signal 2 (SIGINT)
+step 'Waiting for installed OS to be ready'
+$systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --wait -- mkosi --debug sandbox -- socat VSOCK-LISTEN:23433,fork,socktype=5 EXEC:"${tmpdir}/is_ready.sh"
+report_outcome
+
+step ssh into VM
+if $systemd_run -d --wait -q -p StandardInput=file:${tmpdir}/test_script.sh -p StandardOutput=journal -- ssh -i ./mkosi.key \
+    -o UserKnownHostsFile=/dev/null \
+    -o StrictHostKeyChecking=no \
+    -o LogLevel=ERROR \
+    -o ProxyCommand="mkosi sandbox -- socat - VSOCK-CONNECT:42:%p" \
+    root@mkosi
 then
     success
     $systemd_run -u "mangos-test-${testid}-result" -q -- echo "Mangos test ${testid} succeeded"

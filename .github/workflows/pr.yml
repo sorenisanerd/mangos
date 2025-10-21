@@ -42,12 +42,15 @@ jobs:
         run: |
           #!/bin/sh
           mkosi genkey
+      - name: Download Hashistack
+        run: |
+          ./hashiext-download.sh
       - name: Run mkosi
         env:
           profiles: ${{ matrix.profiles }}
           MANGOS_GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile="${profiles}"
+          mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile="${profiles},hashistack"
           mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile="${profiles},installer"
       - name: List built artifacts
         run: find out/

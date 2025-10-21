@@ -1,0 +1,45 @@
+[Unit]
+Description=Nomad
+Documentation=https://www.nomadproject.io/docs/
+Wants=network-online.target
+After=network-online.target
+ConditionFileNotEmpty=/var/lib/private/nomad.consul_token
+
+[Service]
+User=root
+Group=root
+RuntimeDirectory=nomad
+RuntimeDirectoryMode=0700
+
+LoadCredential=nomad.region:/var/lib/private/nomad.region
+ExecStartPre=sh -c "jq -R '{region:.}' ${CREDENTIALS_DIRECTORY}/nomad.region > /run/nomad/region.json"
+
+LoadCredential=nomad.datacenter:/var/lib/private/nomad.datacenter
+ExecStartPre=sh -c "jq -R '{datacenter:.}' ${CREDENTIALS_DIRECTORY}/nomad.datacenter > /run/nomad/datacenter.json"
+
+LoadCredentialEncrypted=nomad.consul_token:/var/lib/private/nomad.consul_token
+ExecStartPre=sh -c "jq -R '{consul:{token:.}}' ${CREDENTIALS_DIRECTORY}/nomad.consul_token > /run/nomad/consul.json"
+
+ExecStartPre=sh -c "consul acl token read -token-file ${CREDENTIALS_DIRECTORY}/nomad.consul_token -self -format=json | \
+                    jq '{server:{enabled:([.ServiceIdentities[].ServiceName] | contains([\"nomad-server\"]))}}' > ${RUNTIME_DIRECTORY}/server.json"
+
+ExecStart=/usr/bin/nomad agent \
+	-config /usr/share/nomad \
+	-config ${RUNTIME_DIRECTORY}/region.json \
+	-config ${RUNTIME_DIRECTORY}/datacenter.json \
+	-config ${RUNTIME_DIRECTORY}/consul.json \
+	-config ${RUNTIME_DIRECTORY}/server.json
+
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+KillSignal=SIGINT
+LimitNOFILE=65536
+LimitNPROC=infinity
+Restart=on-failure
+RestartSec=2
+
+TasksMax=infinity
+OOMScoreAdjust=-1000
+
+[Install]
+WantedBy=multi-user.target

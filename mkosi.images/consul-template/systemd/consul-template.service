@@ -1,0 +1,35 @@
+[Unit]
+Description=Consul-template
+Documentation=https://github.com/hashicorp/consul-template
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=root
+Group=root
+
+LoadCredential=mangos.csr
+LoadCredentialEncrypted=mangos.key
+Environment=VAULT_ADDR=https://vault.service.consul:8200
+Environment=VAULT_CACERT=/etc/ssl/certs/pki-root.pem
+EnvironmentFile=/etc/mangos.environment
+ExecStartPre=sh -c "vault login -method cert -path node-cert -client-cert /var/lib/mangos/mangos.crt -client-key ${CREDENTIALS_DIRECTORY}/mangos.key -token-only > ${RUNTIME_DIRECTORY}/vault.token"
+ExecStart=/usr/bin/consul-template \
+	-config /usr/share/consul-template/conf \
+	-vault-agent-token-file=${RUNTIME_DIRECTORY}/vault.token
+RuntimeDirectory=consul-template
+RuntimeDirectoryMode=0700
+
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+KillSignal=SIGINT
+LimitNOFILE=65536
+LimitNPROC=infinity
+Restart=on-failure
+RestartSec=2
+
+TasksMax=infinity
+OOMScoreAdjust=-1000
+
+[Install]
+WantedBy=multi-user.target

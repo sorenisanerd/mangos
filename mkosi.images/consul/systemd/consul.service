@@ -1,0 +1,36 @@
+[Unit]
+Description="HashiCorp Consul - A service mesh solution"
+Documentation=https://www.consul.io/
+Requires=network-online.target consul.service
+After=network-online.target consul.service
+
+[Service]
+Type=notify
+User=consul
+Group=consul
+
+LoadCredential=consul.datacenter:/var/lib/private/consul.datacenter
+ExecStartPre=sh -c "jq -R '{datacenter:.}' ${CREDENTIALS_DIRECTORY}/consul.datacenter > ${RUNTIME_DIRECTORY}/datacenter.json"
+
+LoadCredentialEncrypted=consul.agent_recovery:/var/lib/private/consul.agent_recovery
+ExecStartPre=sh -c "jq -R '{acl:{tokens:{agent_recovery:.}}}' ${CREDENTIALS_DIRECTORY}/consul.agent_recovery > ${RUNTIME_DIRECTORY}/agent_recovery.json"
+
+ExecStart=/usr/bin/consul agent \
+            -retry-join 127.0.0.1 \
+            -config-dir=/usr/share/consul/ \
+            -config-file=${RUNTIME_DIRECTORY}/datacenter.json \
+            -config-file=${RUNTIME_DIRECTORY}/agent_recovery.json
+
+ExecReload=/bin/kill --signal HUP $MAINPID
+StateDirectory=consul/data consul/ssl
+
+RuntimeDirectory=consul
+RuntimeDirectoryMode=0700
+
+KillMode=process
+KillSignal=SIGTERM
+Restart=on-failure
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

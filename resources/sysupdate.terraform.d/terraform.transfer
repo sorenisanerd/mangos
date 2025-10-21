@@ -1,0 +1,14 @@
+[Source]
+Type=url-file
+Path=http://localhost:1002/
+MatchPattern=terraform_@v.raw \
+             terraform_@v.raw.gz \
+             terraform_@v.raw.zstd \
+             terraform_@v.raw.xz \
+
+[Target]
+Type=regular-file
+Path=/var/lib/extensions
+InstancesMax=2
+MatchPattern=terraform_@v.raw
+Mode=0444

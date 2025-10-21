@@ -1,0 +1,20 @@
+{{- $consulDatacenter := env "CONSUL_DATACENTER" -}}
+{{- if not $consulDatacenter -}}
+{{-   with node -}}
+{{-     $consulDatacenter = .Node.Datacenter -}}
+{{-   end -}}
+{{- end -}}
+{{- $role := "consul-client" -}}
+{{- $cn := printf "client.%s.consul" $consulDatacenter -}}
+{{- with secret "auth/token/lookup-self" -}}
+{{-   if (or (.Data.identity_policies | contains "consul-server-issuer") (env "CONSUL_SERVER")) -}}
+{{-     $role = "consul-server" -}}
+{{-     $cn   = printf "server.%s.consul" $consulDatacenter -}}
+{{-   end -}}
+{{-   with pkiCert (printf "pki-svc/issue/%s" $role) (printf "common_name=%s" $cn) -}}
+{{-     .Cert -}}
+{{-     .CA   -}}
+{{-     .Key  | writeToFile "/var/lib/consul/ssl/consul.key.new" "consul" "consul" "0400" -}}
+{{-     .CA   | writeToFile "/var/lib/consul/ssl/ca.pem.new"     "root"   "root"   "0644" -}}
+{{-   end -}}
+{{- end -}}

@@ -1,0 +1,40 @@
+[Unit]
+Description="HashiCorp Vault - A tool for managing secrets"
+Documentation=https://www.vaultproject.io/docs/
+Requires=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+LoadCredentialEncrypted=vault.unseal_key:/var/lib/private/vault.unseal_key
+LoadCredentialEncrypted=vault.consul_token
+Type=notify
+User=vault
+Group=vault
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=yes
+PrivateDevices=yes
+SecureBits=keep-caps
+AmbientCapabilities=CAP_IPC_LOCK
+CapabilityBoundingSet=CAP_SYSLOG CAP_IPC_LOCK
+NoNewPrivileges=yes
+ExecStartPre=sh -c "cat ${CREDENTIALS_DIRECTORY}/vault.consul_token | jq -R '{service_registration:{consul:{token:.}}}' > /run/vault/config/service-registration.json"
+ExecStart=/usr/bin/vault server -config=/usr/share/vault -config=/run/vault/config
+ExecStartPost=sh -c "cat ${CREDENTIALS_DIRECTORY}/vault.unseal_key | jq '{key:.}' -R | curl --unix-socket /run/vault/vault.sock http://127.0.0.1:8200/v1/sys/unseal --data @- -X POST"
+ExecReload=/bin/kill --signal HUP $MAINPID
+StateDirectory=vault/raft vault/ssl
+StateDirectoryMode=0700
+RuntimeDirectory=vault vault/config
+RuntimeDirectoryMode=0700
+KillMode=process
+KillSignal=SIGINT
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target
