@@ -41,6 +41,24 @@ jobs:
                               dl/mangos.tools_*.tar.zst
       - name: Decompress and stage tools
         run: mkdir mkosi.tools ; tar -x --zstd -f dl/mangos.tools_*.tar.zst -C mkosi.tools
+      - uses: dsaltares/fetch-gh-release-asset@master
+        id: pkgs-fetch
+        with:
+          repo: ${{ github.repository_owner }}/mangos-tools
+          version: latest
+          file: 'mangos-packages_.*\.tar\.zst.*'
+          regex: true
+          target: 'dl/'
+      - name: Verify packages signature
+        env:
+          tag: ${{ steps.pkgs-fetch.outputs.version }}
+        run: |
+          cosign verify-blob  --bundle dl/mangos-packages_*.tar.zst.sigbundle \
+                              --certificate-identity "${{ github.server_url }}/${{ github.repository_owner }}/mangos-tools/.github/workflows/build.yml@refs/tags/${tag}" \
+                              --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+                              dl/mangos-packages_*.tar.zst
+      - name: Decompress and stage packages
+        run: mkdir mkosi.packages ; tar -x --zstd -f dl/mangos-packages_*.tar.zst -C mkosi.packages
       - name: Inject key and cert
         env:
           MANGOS_CERT: ${{ vars.MANGOS_CERT }}
