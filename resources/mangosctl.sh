@@ -2,10 +2,15 @@
 
 set -e
 
-. /etc/os-release
+if [ -z "${MANGOS_VERSION}" ]
+then
+	MANGOS_VERSION="$(. /etc/os-release; echo ${IMAGE_VERSION})"
+fi
 
-MANGOS_VERSION=$IMAGE_VERSION
-BASE_URL=$MKOSI_SERVE_URL
+if [ -z "${BASE_URL}" ]
+then
+	BASE_URL="$(. /etc/os-release ; echo ${MKOSI_SERVE_URL})"
+fi
 
 # Determine if this system is booted in EFI mode
 is_efi() {

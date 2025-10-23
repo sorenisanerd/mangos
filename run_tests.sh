@@ -251,7 +251,7 @@ systemctl is-active systemd-veritysetup@root.service
 systemctl is-active systemd-cryptsetup@swap.service
 systemctl is-active systemd-cryptsetup@var.service
 systemctl is-active systemd-cryptsetup@var\\x2dtmp.service
-mangosctl bootstrap
+BASE_URL=http://10.0.2.2:8081 mangosctl bootstrap
 
 EOF
 chmod +x "${tmpdir}/test_script.sh"
