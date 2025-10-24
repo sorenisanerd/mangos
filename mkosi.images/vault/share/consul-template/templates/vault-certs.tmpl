@@ -1,0 +1,10 @@
+{{- with secret "auth/token/lookup-self" -}}
+{{-   if (or (.Data.identity_policies | contains "vault-issuer") (env "VAULT_SERVER")) -}}
+{{-     with pkiCert "pki-svc/issue/vault-server" "common_name=vault.service.consul" -}}
+{{-       .Cert -}}
+{{-       .CA   -}}
+{{-       .Key  | writeToFile "/var/lib/vault/ssl/vault.key.new" "vault" "vault" "0400" -}}
+{{-       .CA   | writeToFile "/var/lib/vault/ssl/ca.pem.new"    "root"  "root"  "0644" -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}

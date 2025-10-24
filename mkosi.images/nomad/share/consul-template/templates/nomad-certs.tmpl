@@ -1,0 +1,18 @@
+{{- $datacenter := env "NOMAD_DATACENTER" -}}
+{{- $region     := env "NOMAD_REGION" -}}
+{{- $role       := "nomad-client" -}}
+{{- $alt_names  := "" -}}
+{{- $cn         := printf "client.%s.nomad" $region -}}
+{{- with secret "auth/token/lookup-self" -}}
+{{-   if (or (.Data.identity_policies | contains "nomad-server-issuer") (env "NOMAD_SERVER")) -}}
+{{-     $role      = "nomad-server" -}}
+{{-     $cn        = printf "server.%s.nomad" $region -}}
+{{-     $alt_names = "nomad.service.consul" -}}
+{{-   end -}}
+{{-   with pkiCert (printf "pki-svc/issue/%s" $role) (printf "common_name=%s" $cn) (printf "alt_names=%s" $alt_names) -}}
+{{-     .Cert -}}
+{{-     .CA   -}}
+{{-     .Key  | writeToFile "/var/lib/nomad/ssl/nomad.key.new" "nomad" "nomad" "0400" -}}
+{{-     .CA   | writeToFile "/var/lib/nomad/ssl/ca.pem.new"    "root"  "root"   "0644" -}}
+{{-   end -}}
+{{- end -}}
