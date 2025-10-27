@@ -132,11 +132,6 @@ do_enroll() {
 
 	confext_dir="$(mktemp -d)"
 
-	echo -n "Generating hostname based on machine-id... "
-	hostname="node$(systemd-id128 -a 37bbec07-1085-4f2c-aff7-3fcc8c2a891b machine-id | grep -oE '.{12}$')"
-	echo $hostname
-	hostnamectl set-hostname --transient $hostname
-
 	mkdir -p ${confext_dir}/etc/extension-release.d
 	echo 'ID=_any' > ${confext_dir}/etc/extension-release.d/extension-release.${hostname}
 
@@ -443,11 +438,6 @@ do_bootstrap() {
 				usage
 		esac
 	done
-
-	echo -n "Generating hostname based on machine-id... "
-	hostname="node$(systemd-id128 -a 37bbec07-1085-4f2c-aff7-3fcc8c2a891b machine-id | grep -oE '.{12}$')"
-	echo $hostname
-	hostnamectl set-hostname --transient $hostname
 
 	# Clean up from previous runs
 	if [ -n "$CLEANUP" ]
