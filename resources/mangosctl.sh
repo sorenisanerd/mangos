@@ -98,7 +98,17 @@ do_install() {
 do_enroll() {
 	declare -A groups
 
-	args="$(getopt -o 'g:' --long 'group:' -n 'mangosctl enroll' -- "$@")"
+	if [ -z "${REGION}" ]
+	then
+		REGION="$(. /etc/environment.d/20-mangos.conf ; echo ${NOMAD_REGION})"
+	fi
+
+	if [ -z "${DATACENTER}" ]
+	then
+		DATACENTER="$(. /etc/environment.d/20-mangos.conf ; echo ${NOMAD_DATACENTER})"
+	fi
+
+	args="$(getopt -o 'g:r:d:' --long 'group:region:dc:datacenter:' -n 'mangosctl enroll' -- "$@")"
 	if [ $? != 0 ]
 	then
 		echo "Error parsing arguments" >&2
@@ -111,6 +121,14 @@ do_enroll() {
 		case "$1" in
 			-g|--group)
 				groups[$2]=1
+				shift 2
+				;;
+			-r|--region)
+				REGION="$2"
+				shift 2
+				;;
+			-d|--dc|--datacenter)
+				DATACENTER="$2"
 				shift 2
 				;;
 			--)
@@ -130,15 +148,14 @@ do_enroll() {
 		exit 1
 	fi
 
-	confext_dir="$(mktemp -d)"
+	confext_dir="/var/lib/confexts/${HOSTNAME}"
 
-	mkdir -p ${confext_dir}/etc/extension-release.d
-	echo 'ID=_any' > ${confext_dir}/etc/extension-release.d/extension-release.${hostname}
+	mkdir -p ${confext_dir}/etc/{extension-release,environment}.d
+	echo 'ID=_any' > ${confext_dir}/etc/extension-release.d/extension-release.${HOSTNAME}
 
-	echo ${hostname} > ${confext_dir}/etc/hostname
-	echo CONSUL_DATACENTER=${REGION}-${DATACENTER} > ${confext_dir}/etc/mangos.environment
-	echo NOMAD_DATACENTER=${DATACENTER} >> ${confext_dir}/etc/mangos.environment
-	echo NOMAD_REGION=${REGION} >> ${confext_dir}/etc/mangos.environment
+	echo CONSUL_DATACENTER=${REGION}-${DATACENTER} >> ${confext_dir}/etc/environment.d/20-mangos.conf
+	echo NOMAD_DATACENTER=${DATACENTER}            >> ${confext_dir}/etc/environment.d/20-mangos.conf
+	echo NOMAD_REGION=${REGION}                    >> ${confext_dir}/etc/environment.d/20-mangos.conf
 
 	localcerts=$(mktemp -d)
 	mkdir -p ${confext_dir}/etc/ssl/certs
@@ -148,36 +165,46 @@ do_enroll() {
 	cp ${localcerts}/pki-root.crt ${confext_dir}/etc/ssl/certs/pki-root.pem
 	rm -rf ${localcerts}
 
-
 	mkdir -p ${confext_dir}/etc/credstore
 	mkdir -p ${confext_dir}/etc/credstore.encrypted
 
-	echo -n "Generating private key... "
-	openssl genrsa -quiet 2048 | systemd-creds encrypt - ${confext_dir}/etc/credstore.encrypted/mangos.key
-	echo "Done"
+	keyfile="${confext_dir}/etc/credstore.encrypted/mangos.key"
+	csr="${confext_dir}/etc/credstore/mangos.csr"
+	if ! [ -s "${keyfile}" ]
+	then
+		echo -n "Generating private key... "
+		openssl genrsa -quiet 2048 | systemd-creds encrypt - "${keyfile}"
+		echo "Done"
+	fi
 
-	echo -n "Generating Certificate Signing Request (CSR) $csr... "
-	openssl req -key <(systemd-creds decrypt ${confext_dir}/etc/credstore.encrypted/mangos.key) -new -subj "/CN=${hostname}.mangos/" -out "${confext_dir}/etc/credstore/mangos.csr"
-	echo "Done"
+	if ! [ -s "${csr}" ]
+	then
+		echo -n "Generating Certificate Signing Request (CSR) $csr... "
+		openssl req -key <(systemd-creds decrypt "${keyfile}") -new -subj "/CN=${HOSTNAME}.mangos/" -out "${csr}"
+		echo "Done"
+	fi
 
 	mkdir -p /var/lib/mangos
 	vault write -field=certificate pki-nodes/sign/node-cert \
 		csr=@${confext_dir}/etc/credstore/mangos.csr \
-		common_name=${hostname}.mangos \
+		common_name=${HOSTNAME}.mangos \
 		ttl=72h \
 		format=pem > /var/lib/mangos/mangos.crt
 
+	# Use the issued certificate to authenticate to Vault
+	# This both verifies that the auth method works, the node can authenticate,
+	# AND it creates the identity entity for this node.
 	NODE_VAULT_TOKEN=$(vault login -method=cert -path=node-cert -client-cert=/var/lib/mangos/mangos.crt -client-key=<(systemd-creds decrypt ${confext_dir}/etc/credstore.encrypted/mangos.key) -token-only)
 
 	node_auth_accessor=$(vault read -field=accessor sys/auth/node-cert)
-	entity_name=$(vault write -field=name identity/lookup/entity alias_name=$(hostname).mangos alias_mount_accessor=${node_auth_accessor})
+	entity_name=$(vault write -field=name identity/lookup/entity alias_name=${HOSTNAME}.mangos alias_mount_accessor=${node_auth_accessor})
 
 	for group in ${!groups[@]}
 	do
 		do_entity addgroup ${entity_name} ${group}
 	done
 
-    # Enroll the node into Consul
+	# Enroll the node into Consul
 	echo "Enrolling node into Consul:"
 
 	echo -n "Issuing certificates for Consul and Nomad... "
@@ -194,15 +221,26 @@ do_enroll() {
 		-config /usr/share/consul-template/conf/consul-certs.hcl \
 		-config /usr/share/consul-template/conf/nomad-certs.hcl
 
-	enckey=$(mktemp --suffix .json)
-	chown consul:consul $enckey
-	vault read -field=encryption_key secrets/mangos/consul/gossip | jq -R '{encrypt:.}' > ${enckey}
-	echo Done
+	argv=()
 
-	echo -n "Generating Consul agent recovery token... "
-	agent_recovery_token=$(systemd-id128 -u new)
-	systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/consul.agent_recovery <<<${agent_recovery_token}
-	echo Done
+	# If we already have a keyring, no need to inject the current key
+	if ! [ -s "/var/lib/consul/data/serf/local.keyring" ]
+	then
+		enckey=$(mktemp --suffix .json)
+		chown consul:consul $enckey
+		vault read -field=encryption_key secrets/mangos/consul/gossip | jq -R '{encrypt:.}' > ${enckey}
+		argv+=(-config-file=${enckey})
+		echo Done
+	fi
+
+	# If there's already an agent recovery token, we don't need to add a new one
+	if ! [ -s "${confext_dir}/etc/credstore.encrypted/consul.agent_recovery" ]
+	then
+		echo -n "Generating Consul agent recovery token... "
+		agent_recovery_token=$(systemd-id128 -u new)
+		systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/consul.agent_recovery <<<${agent_recovery_token}
+		echo Done
+	fi
 
 	if ! [ -e "/var/lib/consul/data/raft" ]
 	then
@@ -218,7 +256,7 @@ do_enroll() {
 			-retry-join ${1} \
 			-config-dir=/usr/share/consul/ \
 			-datacenter "${REGION}-${DATACENTER}" \
-			-config-file=${enckey}
+			"$argv[@]"
 	fi
 
 	systemctl start consul
@@ -249,30 +287,32 @@ do_enroll() {
 		set_agent_token config_file_service_registration "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -role-name=consul-registration -format=json | jq -r .SecretID)"
 	fi
 
-	argv=()
-
-	if [ "${groups[nomad-servers]}" = "1" ]
+	if ! [ -s "${confext_dir}/etc/credstore.encrypted/nomad.consul_token" ]
 	then
-		argv+=(-service-identity nomad-server -policy-name nomad-server)
+		argv=()
+
+		if [ "${groups[nomad-servers]}" = "1" ]
+		then
+			argv+=(-service-identity nomad-server -policy-name nomad-server)
+		fi
+
+		if [ "${groups[nomad-clients]}" = "1" ]
+		then
+			argv+=(-service-identity nomad-client -policy-name nomad-client)
+		fi
+
+		echo -n "Creating Consul token for Nomad server... "
+		CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create \
+			"${argv[@]}" \
+			-description "Nomad server and/or client on $(hostname)" \
+			-format=json | jq .SecretID -r | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/nomad.consul_token
+		echo "Done"
 	fi
 
-	if [ "${groups[nomad-clients]}" = "1" ]
-	then
-		argv+=(-service-identity nomad-client -policy-name nomad-client)
-	fi
+	systemd-confext refresh
 
-	echo -n "Creating Consul token for Nomad server... "
-	CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create \
-                        -service-identity nomad-server \
-                        -service-identity nomad-client \
-                        -policy-name nomad-server      \
-                        -policy-name nomad-client      \
-                        -description "Nomad Server/Client token on $(hostname)" \
-                        -format=json | jq .SecretID -r | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/nomad.consul_token
-	echo "Done"
-	rm -rf "/var/lib/confexts/${hostname}"
+	cat /etc/environment /etc/environment.d/20-mangos.conf | sort -u > ${confext_dir}/etc/environment 
 
-	mv ${confext_dir} /var/lib/confexts/${hostname}
 	systemd-confext refresh
 }
 
@@ -318,7 +358,7 @@ do_entity() {
 	esac
 }
 
-do_update() {
+do_updatectl() {
 	for d in /usr/lib/sysupdate*.d/*.transfer
 	do
 		mkdir -p "/run/${d#/usr/lib/}.d"
@@ -357,6 +397,9 @@ EOF
 	done
 
 	updatectl "$@"
+	systemd-sysext refresh
+	systemd-confext refresh
+	systemctl daemon-reload
 
 	if is_efi
 	then
@@ -412,6 +455,8 @@ do_bootstrap() {
 	REGION=global
 	DATACENTER=test
 
+	# mangos.service Upholds the entire stack, so stop it while we bootstrap
+	systemctl stop mangos
 	while [ $# -gt 0 ]
 	do
 		case "$1" in
@@ -452,7 +497,7 @@ do_bootstrap() {
 	fi
 
 	echo "Downloading the full hashistack:"
-	do_update update component:{consul,consul-template,nomad,terraform,vault}
+	do_updatectl update host component:{consul,consul-template,nomad,terraform,vault}
 	echo Done.
 
 	echo -n "Merging Hashistack sysext... "
@@ -484,15 +529,20 @@ do_bootstrap() {
 		/usr/bin/vault server -config=/usr/share/vault-bootstrap
 	echo "Done".
 
+	confext_dir="/var/lib/confexts/${HOSTNAME}"
+	mkdir -p ${confext_dir}/etc/extension-release.d
+	echo 'ID=_any' > ${confext_dir}/etc/extension-release.d/extension-release.${HOSTNAME}
+	mkdir -p ${confext_dir}/etc/credstore.encrypted
+
 	echo -n "Saving encrypted unseal key and root token... "
-	jq -r '.keys[0]' /run/vault/init.json | systemd-creds -H encrypt - /var/lib/private/vault.unseal_key
+	jq -r '.keys[0]' /run/vault/init.json | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/vault.unseal_key
 	jq -r '.root_token' /run/vault/init.json | systemd-creds -H encrypt - /var/lib/private/vault.root_token
 	rm /run/vault/init.json
 	echo "Done"
 
 	# Unseal vault
 	echo -n "Unsealing vault... "
-	systemd-creds decrypt /var/lib/private/vault.unseal_key | jq '{key:.}' -R | chronic curl --unix-socket /run/vault/vault.sock http://127.0.0.1:8200/v1/sys/unseal --data @- -X POST
+	systemd-creds decrypt ${confext_dir}/etc/credstore.encrypted/vault.unseal_key | jq '{key:.}' -R | chronic curl --unix-socket /run/vault/vault.sock http://127.0.0.1:8200/v1/sys/unseal --data @- -X POST
 	echo Done
 
 	echo -n "Copying terraform files into place... "
@@ -535,6 +585,8 @@ do_bootstrap() {
 		-config /usr/share/consul-template/conf/nomad-certs.hcl
 	echo Done
 
+	chronic systemd-confext refresh
+
 	echo -n "Restarting Vault in non-bootstrap mode... "
 	chronic systemctl start vault
 	echo Done
@@ -560,7 +612,10 @@ do_bootstrap() {
 		-config-file=${enckey} -bootstrap
 	echo "Done"
 
-	echo "${REGION}-${DATACENTER}" > /var/lib/private/consul.datacenter
+	mkdir -p ${confext_dir}/etc/environment.d
+	echo CONSUL_DATACENTER=${REGION}-${DATACENTER} >> ${confext_dir}/etc/environment.d/20-mangos.conf
+	echo NOMAD_DATACENTER=${DATACENTER}            >> ${confext_dir}/etc/environment.d/20-mangos.conf
+	echo NOMAD_REGION=${REGION}                    >> ${confext_dir}/etc/environment.d/20-mangos.conf
 
 	echo -n "Waiting until this node is the Consul leader... "
 	journalctl -u consul-bootstrap -f -I -n all | grep -q "cluster leadership acquired"
@@ -581,9 +636,10 @@ do_bootstrap() {
 
 	echo -n "Generating Consul agent recovery token... "
 	agent_recovery_token=$(systemd-id128 -u new)
-	systemd-creds -H encrypt - /var/lib/private/consul.agent_recovery <<<${agent_recovery_token}
+	systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/consul.agent_recovery <<<${agent_recovery_token}
 	echo Done
 
+	systemd-confext refresh
 	echo -n "Launching Consul in non-bootstrap mode... "
 	chronic systemctl start consul
 	echo Done
@@ -605,16 +661,14 @@ do_bootstrap() {
 	set_agent_token replication                      "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -role-name=consul-replication -format=json | jq -r .SecretID)"
 	set_agent_token config_file_service_registration "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -role-name=consul-registration -format=json | jq -r .SecretID)"
 
-	mkdir -p /var/lib/confexts/bootstrap/etc/extension-release.d
-	echo 'ID=_any' > /var/lib/confexts/bootstrap/etc/extension-release.d/extension-release.bootstrap
-	mkdir -p /var/lib/confexts/bootstrap/etc/credstore.encrypted
-
 	CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create \
 						-service-identity vault:${REGION}-${DATACENTER} \
-						-format=json | jq -r .SecretID | systemd-creds -H encrypt - /var/lib/confexts/bootstrap/etc/credstore.encrypted/vault.consul_token
+						-format=json | jq -r .SecretID | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/vault.consul_token
 
-	systemd-confext refresh
+	chronic systemd-confext refresh
 	systemctl restart vault
+
+	echo VAULT_ADDR=https://vault.service.consul:8200 >> ${confext_dir}/etc/environment.d/20-mangos.conf
 
 	echo -n "Creating Consul token for Nomad server... "
 	CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create \
@@ -622,21 +676,20 @@ do_bootstrap() {
                         -service-identity nomad-client \
                         -policy-name nomad-server      \
                         -policy-name nomad-client      \
-                        -description "Nomad Server/Client token on $(hostname)" \
-                        -format=json | jq .SecretID -r | systemd-creds -H encrypt - /var/lib/private/nomad.consul_token
+                        -description "Nomad Server/Client token on ${HOSTNAME}" \
+                        -format=json | jq .SecretID -r | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/nomad.consul_token
 	echo "Done"
 
+	chronic systemd-confext refresh
+
 	mkdir -p /run/nomad
-	systemd-creds decrypt /var/lib/private/nomad.consul_token | jq -R '{consul:{token:.}}' > /run/nomad/consul-agent.json
+	systemd-creds decrypt ${confext_dir}/etc/credstore.encrypted/nomad.consul_token | jq -R '{consul:{token:.}}' > /run/nomad/consul-agent.json
 
 	chown nomad:nomad /run/nomad/consul-agent.json
 
 	dc_and_region="$(mktemp --suffix .json)"
 	chown nomad:nomad "${dc_and_region}"
-	echo "{ \"datacenter\": \"${DATACENTER}\", \"region\": \"${REGION}\" }" > "${dc_and_region}"
-
-	echo $REGION > /var/lib/private/nomad.region
-	echo $DATACENTER > /var/lib/private/nomad.datacenter
+	jq -n '{datacenter:env.DATACENTER,region:env.REGION}' > "${dc_and_region}"
 
 	echo -n "Launching Nomad in bootstrap mode... "
 	chronic systemd-run \
@@ -664,8 +717,10 @@ do_bootstrap() {
 	done
 	echo " Done"
 
-	export NOMAD_ADDR=https://127.0.0.1:4646/
-	export NOMAD_TLS_SERVER_NAME=nomad.service.consul
+	echo   NOMAD_ADDR=https://nomad.service.consul:4646 >> ${confext_dir}/etc/environment.d/20-mangos.conf
+	export NOMAD_ADDR=https://nomad.service.consul:4646
+
+	chronic systemd-confext refresh
 
 	echo -n "Bootstrapping Nomad via Vault... "
 	chronic run_terraform_apply -target=vault_nomad_secret_backend.nomad
@@ -682,7 +737,7 @@ do_bootstrap() {
 
 set_agent_token() {
 	echo -n "Setting Consul $1 token... "
-	chronic consul acl set-agent-token -token-file <(systemd-creds decrypt /var/lib/private/consul.agent_recovery) "$@"
+	chronic consul acl set-agent-token -token-file <(systemd-creds decrypt /etc/credstore.encrypted/consul.agent_recovery) "$@"
 	echo Done
 }
 
@@ -698,15 +753,24 @@ usage() {
 	echo 'Usage: $0 {install|update|enroll}'
 	echo
 	echo ' install          - install mangos on this machine'
-	echo ' update           - update an existing mangos installation'
+	echo ' updatectl        - update an existing mangos installation'
 	echo ' enroll           - generate a private key and CSR for this machine'
 	echo ' addext EXTENSION - pull and merge an extension (e.g. \"debug\")'
-	echo ' bootstrap-mangos - bootstrap a mangos installation'
+	echo ' bootstrap        - bootstrap a mangos installation'
 	echo ''
-	echo 'Options for bootstrap-mangos:'
+	echo 'Options for bootstrap:'
 	echo '  --region=REGION          Set the region for the mangos installation (default: global)'
 	echo '  --datacenter=DATACENTER  Set the datacenter for the mangos installation (default: dc1)'
 	echo '  --clean                  Clean up any existing mangos installation before bootstrapping'
+	echo ''
+	echo 'Options for enroll:'
+	echo '  -gGROUP, --group=GROUP        Add this node to GROUP (can be specified multiple times)'
+	echo '  -rREGION, --region=REGION     Specify the region for this node'
+	echo '  -dDATACENTER, --dc=DATACENTER Specify the datacenter for this node'
+	echo ''
+	echo 'Example:'
+	echo "  $0"' enroll -g{vault-server,{nomad,consul}-{server,client}}s -r us-west1 -d dc1 127.0.0.1'
+	echo ''
 	exit 1
 }
 
@@ -792,9 +856,9 @@ else
 			shift
 			do_install
 			;;
-		update)
+		updatectl)
 			shift
-			do_update "$@"
+			do_updatectl "$@"
 			;;
 		group)
 			shift
@@ -812,7 +876,7 @@ else
 			shift
 			do_enroll "$@"
 			;;
-		bootstrap-mangos|bootstrap)
+		bootstrap)
 			shift
 			do_bootstrap "$@"
 			;;

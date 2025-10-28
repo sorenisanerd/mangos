@@ -1,18 +1,17 @@
 [Unit]
 Description="HashiCorp Consul - A service mesh solution"
 Documentation=https://www.consul.io/
-Requires=network-online.target consul.service
-After=network-online.target consul.service
+Requires=network-online.target
+After=network-online.target
 
 [Service]
 Type=notify
 User=consul
 Group=consul
 
-LoadCredential=consul.datacenter:/var/lib/private/consul.datacenter
-ExecStartPre=sh -c "jq -R '{datacenter:.}' ${CREDENTIALS_DIRECTORY}/consul.datacenter > ${RUNTIME_DIRECTORY}/datacenter.json"
-
-LoadCredentialEncrypted=consul.agent_recovery:/var/lib/private/consul.agent_recovery
+ImportCredential=consul.*
+EnvironmentFile=/etc/environment.d/20-mangos.conf
+ExecStartPre=sh -c "jq -n '{datacenter:env.CONSUL_DATACENTER}' > ${RUNTIME_DIRECTORY}/datacenter.json"
 ExecStartPre=sh -c "jq -R '{acl:{tokens:{agent_recovery:.}}}' ${CREDENTIALS_DIRECTORY}/consul.agent_recovery > ${RUNTIME_DIRECTORY}/agent_recovery.json"
 
 ExecStart=/usr/bin/consul agent \
