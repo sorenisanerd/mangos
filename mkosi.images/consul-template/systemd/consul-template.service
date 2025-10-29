@@ -8,11 +8,9 @@ After=network-online.target
 User=root
 Group=root
 
-LoadCredential=mangos.csr
-LoadCredentialEncrypted=mangos.key
-Environment=VAULT_ADDR=https://vault.service.consul:8200
-Environment=VAULT_CACERT=/etc/ssl/certs/pki-root.pem
-EnvironmentFile=/etc/mangos.environment
+ImportCredential=mangos.*
+Environment=HOSTNAME=%H
+EnvironmentFile=/etc/environment.d/20-mangos.conf
 ExecStartPre=sh -c "vault login -method cert -path node-cert -client-cert /var/lib/mangos/mangos.crt -client-key ${CREDENTIALS_DIRECTORY}/mangos.key -token-only > ${RUNTIME_DIRECTORY}/vault.token"
 ExecStart=/usr/bin/consul-template \
 	-config /usr/share/consul-template/conf \

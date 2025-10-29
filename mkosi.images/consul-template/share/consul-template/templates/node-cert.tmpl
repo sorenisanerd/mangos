@@ -5,10 +5,11 @@
 {{- else -}}
 {{-   $csrPath = printf "/var/lib/mangos/mangos.csr" -}}
 {{- end -}}
-{{- $csr := file $csrPath -}}
-{{- $hostname := env "HOSTNAME" -}}
-{{- with pkiCert "node-cert/sign/node-cert-self"
-        (printf "common_name=%s" $hostname)
+{{- with $csr := file $csrPath -}}
+{{-   $hostname := env "HOSTNAME" -}}
+{{-   with pkiCert "pki-nodes/sign/node-cert-self"
+        (printf "common_name=%s.mangos" $hostname)
         (printf "csr=%s" $csr) -}}
-{{-   .Cert -}}
+{{-     .Cert -}}
+{{-   end -}}
 {{- end -}}
