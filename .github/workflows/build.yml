@@ -129,6 +129,7 @@ jobs:
             out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos_${{ env.IMAGE_VERSION }}.syft.json
             out/mangos_${{ env.IMAGE_VERSION }}.manifest
+            out/mangosctl
             out/docker*_${{ env.IMAGE_VERSION }}.raw.zst
             out/mangos-installer_${{ env.IMAGE_VERSION }}.raw.zst
             out/mangos-installer_${{ env.IMAGE_VERSION }}.cyclonedx.json
@@ -155,6 +156,7 @@ jobs:
 
           mv artifacts/mangos.verity-full,docker-ext/* release/
           for f in artifacts/mangos.verity-full,docker/* ; do
+            [ "$(basename $f)" == "mangosctl" ] && continue
             mv "$f" "release/mangos+docker_$(basename $f | cut -f2- -d_)"
           done
       - name: Release

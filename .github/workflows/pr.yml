@@ -111,6 +111,7 @@ jobs:
             out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos_${{ env.IMAGE_VERSION }}.syft.json
             out/mangos_${{ env.IMAGE_VERSION }}.manifest
+            out/mangosctl
             out/docker*_${{ env.IMAGE_VERSION }}.raw.zst
             out/mangos-installer_${{ env.IMAGE_VERSION }}.raw.zst
             out/mangos-installer_${{ env.IMAGE_VERSION }}.cyclonedx.json
