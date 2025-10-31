@@ -63,3 +63,16 @@ for tool in terraform vault nomad consul consul-template ; do
     download "$tool" "${!v}"
     unzip ${tool}_*.zip -d mkosi.images/${tool}/bin ${tool}
 done
+
+cni_plugins=https://github.com/containernetworking/plugins/releases/download/v1.8.0/cni-plugins-linux-amd64-v1.8.0.tgz
+
+if ! [ -e "$(basename $cni_plugins)" ]
+then
+    wget $cni_plugins
+fi
+
+if ! [ -d resources/cni ]
+then
+    mkdir -p resources/cni
+    tar xvzf $(basename $cni_plugins) -C resources/cni
+fi
