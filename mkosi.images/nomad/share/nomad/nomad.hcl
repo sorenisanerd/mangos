@@ -4,10 +4,6 @@ acl {
   enabled = true
 }
 
-client {
-  enabled = true
-}
-
 tls {
   http = true
   rpc  = true
@@ -27,6 +23,35 @@ vault {
     env  = false
     file = true
     ttl  = "1h"
+  }
+}
+
+client {
+  enabled                     = true
+  bridge_network_hairpin_mode = true
+
+  host_network "default" {
+    cidr = "{{ GetDefaultInterfaces | exclude \"type\" \"IPv6\" | attr \"string\" }}"
+  }
+
+  host_volume "ca-certificates" {
+    path      = "/etc/ssl/certs"
+    read_only = true
+  }
+
+  host_volume "timezone" {
+    path      = "/etc/timezone"
+    read_only = true
+  }
+
+  host_volume "docker" {
+    path      = "/var/run/docker.sock"
+    read_only = false
+  }
+
+  host_volume "localtime" {
+    path      = "/etc/localtime"
+    read_only = true
   }
 }
 
