@@ -1,8 +1,5 @@
 data_dir = "/var/lib/nomad/data"
 
-datacenter = "test"
-region     = "global"
-
 acl {
   enabled = true
 }
