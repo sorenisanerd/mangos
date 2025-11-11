@@ -178,7 +178,7 @@ resource "vault_jwt_auth_backend_role" "vault-plugin-manager" {
     "nomad_namespace" = "admin"
   }
   token_type             = "service"
-  token_policies         = ["vault-plugin-manager", "nomad-workloads"]
+  token_policies         = ["vault-plugin-manager", "nomad-workload"]
   token_period           = 30 * 60
   token_explicit_max_ttl = 0
 }
@@ -210,14 +210,14 @@ resource "consul_acl_auth_method" "nomad-workload" {
 # name, providing a crude namespacing mechanism.
 #
 resource "consul_acl_binding_rule" "nomad-workload-service" {
-  auth_method = consul_acl_auth_method.nomad-workloads.name
+  auth_method = consul_acl_auth_method.nomad-workload.name
   bind_type   = "service"
   bind_name   = "$${value.nomad_namespace}--$${value.nomad_service}"
   selector    = "\"nomad_service\" in value"
 }
 
 resource "consul_acl_binding_rule" "nomad-workload-service-sidecar" {
-  auth_method = consul_acl_auth_method.nomad-workloads.name
+  auth_method = consul_acl_auth_method.nomad-workload.name
   bind_type   = "service"
   bind_name   = "$${value.nomad_namespace}--$${value.nomad_service}-sidecar-proxy"
   selector    = "\"nomad_service\" in value"
@@ -228,7 +228,7 @@ resource "consul_acl_binding_rule" "nomad-workload-service-sidecar" {
 # grant it to Nomad workloads.
 #
 resource "consul_acl_binding_rule" "nomad-workload-role" {
-  auth_method = consul_acl_auth_method.nomad-workloads.name
+  auth_method = consul_acl_auth_method.nomad-workload.name
   bind_type   = "role"
   bind_name   = "$${value.nomad_namespace}"
   selector    = "\"nomad_service\" not in value"
@@ -238,7 +238,7 @@ resource "consul_acl_binding_rule" "nomad-workload-role" {
 # Grant all Nomad workloads `builtin/dns`.
 #
 resource "consul_acl_binding_rule" "nomad-workload-dns" {
-  auth_method = consul_acl_auth_method.nomad-workloads.name
+  auth_method = consul_acl_auth_method.nomad-workload.name
   bind_type   = "templated-policy"
   bind_name   = "builtin/dns"
 }
@@ -247,7 +247,7 @@ resource "consul_acl_binding_rule" "nomad-workload-dns" {
 # Grant all Nomad workloads the `nomad-workload` role.
 #
 resource "consul_acl_binding_rule" "nomad-workload-nomad-workload" {
-  auth_method = consul_acl_auth_method.nomad-workloads.name
+  auth_method = consul_acl_auth_method.nomad-workload.name
   bind_type   = "role"
   bind_name   = consul_acl_role.nomad-workload.name
 }
