@@ -1,0 +1,6 @@
+#!/bin/sh
+
+cp -r ${SRCDIR}/resources/mangosctl ${BUILDDIR}/mangosctl
+cd ${BUILDDIR}/mangosctl
+dpkg-buildpackage -us -uc -b
+mv ../mangosctl_*.deb ${PACKAGEDIR}

@@ -1,0 +1,12 @@
+Source: mangosctl
+Section: admin
+Priority: extra
+Maintainer: Soren Hansen <soren.hansen@mastercard.com>
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.4
+
+Package: mangosctl
+Architecture: all
+Depends: wget, openssl
+Description: Mangos management tool
+ Mangos management tool
