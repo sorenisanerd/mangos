@@ -156,16 +156,15 @@ main() {
 			CONSUL_HTTP_TOKEN=$(run_vault read -field=token consul/creds/management) \
 			run_terraform "$@"
 			;;
+		"")
+			echo "No subcommand specified"
+			usage
+			;;
 		*)
 			echo "Unknown subcommand $1"
 			usage
 			;;
 	esac
-
-	if [ $# -lt 1 ]
-	then
-		usage
-	fi
 }
 
 green() {
@@ -575,8 +574,8 @@ do_entity() {
 enable_sysupdate_extension() {
 	for feature in "$@"
 	do
-		mkdir -p "/run/sysupdate.d/${feature}.d"
-		echo -e '[Feature]\nEnabled=yes' > "/run/sysupdate.d/${feature}.d/enable.conf"
+		mkdir -p "/run/sysupdate.d/${feature}.feature.d"
+		echo -e '[Feature]\nEnabled=yes' > "/run/sysupdate.d/${feature}.feature.d/enable.conf"
 	done
 }
 
@@ -657,6 +656,11 @@ EOF
 }
 
 chronic() {
+	if [ "${VERBOSE}" != "" ]
+	then
+		"$@"
+		return $?
+	fi
 	local tmp=$(mktemp)
 	rv=0
 	"$@" > ${tmp} 2>&1 || rv=$?
@@ -676,7 +680,7 @@ run_terraform() {
 }
 
 run_terraform_apply() {
-	chronic run_terraform apply -auto-approve "$@"
+	chronic run_terraform apply -input=false -auto-approve "$@"
 }
 
 do_bootstrap() {
@@ -855,7 +859,7 @@ do_bootstrap() {
 	do_step "Bootstrapping Consul" chronic run_terraform_apply -target=terraform_data.consul-bootstrap
 
 	step "Writing Consul gossip encryption key to Vault"
-	jq -r .encrypt < ${enckey} | \
+	jq -j .encrypt < ${enckey} | \
 	VAULT_TOKEN=$(systemd-creds decrypt /var/lib/private/vault.root_token) \
 	chronic vault write secrets/mangos/consul/gossip encryption_key=-
 	greenln Success
@@ -944,6 +948,7 @@ do_bootstrap() {
 
 	echo   NOMAD_ADDR=https://nomad.service.consul:4646 >> ${confext_dir}/etc/environment.d/20-mangos.conf
 	export NOMAD_ADDR=https://nomad.service.consul:4646
+	export NOMAD_CACERT=/var/lib/nomad/ssl/ca.pem
 
 	do_step "Reloading confexts" chronic systemd-confext refresh
 
