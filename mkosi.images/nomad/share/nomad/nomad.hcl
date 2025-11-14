@@ -1,13 +1,6 @@
 data_dir = "/var/lib/nomad/data"
 
-datacenter = "test"
-region     = "global"
-
 acl {
-  enabled = true
-}
-
-client {
   enabled = true
 }
 
@@ -18,4 +11,61 @@ tls {
   ca_file   = "/var/lib/nomad/ssl/ca.pem"
   cert_file = "/var/lib/nomad/ssl/nomad.crt"
   key_file  = "/var/lib/nomad/ssl/nomad.key"
+}
+
+vault {
+  enabled               = true
+  address               = "https://vault.service.consul:8200/"
+  ca_file               = "/var/lib/nomad/ssl/ca.pem"
+  jwt_auth_backend_path = "nomad-workload"
+  default_identity {
+    aud  = ["vault.io"]
+    env  = false
+    file = true
+    ttl  = "1h"
+  }
+}
+
+client {
+  enabled                     = true
+  bridge_network_hairpin_mode = true
+
+  host_network "default" {
+    cidr = "{{ GetDefaultInterfaces | exclude \"type\" \"IPv6\" | attr \"string\" }}"
+  }
+
+  host_volume "ca-certificates" {
+    path      = "/etc/ssl/certs"
+    read_only = true
+  }
+
+  host_volume "docker" {
+    path      = "/var/run/docker.sock"
+    read_only = false
+  }
+
+  host_volume "localtime" {
+    path      = "/etc/localtime"
+    read_only = true
+  }
+}
+
+consul {
+  service_auth_method   = "nomad-workload"
+  task_auth_method      = "nomad-workload"
+  allow_unauthenticated = false
+
+  service_identity {
+    aud = ["consul.io"]
+    ttl = "1h"
+  }
+
+  task_identity {
+    aud = ["consul.io"]
+    ttl = "1h"
+  }
+}
+
+server {
+  oidc_issuer = "https://nomad.service.consul:4646"
 }

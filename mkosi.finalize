@@ -17,3 +17,8 @@ syft scan dir:${BUILDROOT} \
 	-o "github-json=${OUTPUTDIR}/${NAME}_${IMAGE_VERSION}.github.json" \
 	-o "spdx-json=${OUTPUTDIR}/${NAME}_${IMAGE_VERSION}.spdx.json" \
 	-o "syft-json=${OUTPUTDIR}/${NAME}_${IMAGE_VERSION}.syft.json"
+
+if [ -f "${BUILDROOT}"/usr/bin/mangosctl ]
+then
+    cp "${BUILDROOT}"/usr/bin/mangosctl "${OUTPUTDIR}"/mangosctl
+fi

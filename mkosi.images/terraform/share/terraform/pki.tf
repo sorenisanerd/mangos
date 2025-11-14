@@ -242,6 +242,7 @@ resource "vault_cert_auth_backend_role" "node" {
     token_ttl      = 300
     token_max_ttl  = 600
     token_policies = [
+      vault_policy.lookup-self.name,
       vault_policy.node-cert-self-renew.name,
       vault_policy.consul-gossip.name,
     ]
