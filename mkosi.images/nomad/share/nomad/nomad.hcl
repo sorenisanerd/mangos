@@ -39,11 +39,6 @@ client {
     read_only = true
   }
 
-  host_volume "timezone" {
-    path      = "/etc/timezone"
-    read_only = true
-  }
-
   host_volume "docker" {
     path      = "/var/run/docker.sock"
     read_only = false

@@ -243,19 +243,6 @@ exit 0
 EOF
 chmod +x "${tmpdir}/is_ready.sh"
 
-cat <<'EOF' > "${tmpdir}/test_script.sh"
-set -e
-set -x
-
-trap 'journalctl -n 1000 --no-pager' ERR
-systemctl is-active systemd-veritysetup@root.service
-systemctl is-active systemd-cryptsetup@swap.service
-systemctl is-active systemd-cryptsetup@var.service
-systemctl is-active systemd-cryptsetup@var\\x2dtmp.service
-BASE_URL=http://10.0.2.2:8081 mangosctl bootstrap
-
-EOF
-chmod +x "${tmpdir}/test_script.sh"
 
 # Exit status 130 means killed by signal 2 (SIGINT)
 step 'Waiting for installed OS to be ready'
@@ -263,12 +250,12 @@ $systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --w
 report_outcome
 
 step ssh into VM
-if $systemd_run -d --wait -q -p StandardInput=file:${tmpdir}/test_script.sh -p StandardOutput=journal -- ssh -i ./mkosi.key \
+if $systemd_run -d --wait -q -p StandardOutput=journal -- ssh -i ./mkosi.key \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
     -o LogLevel=ERROR \
     -o ProxyCommand="mkosi sandbox -- socat - VSOCK-CONNECT:42:%p" \
-    root@mkosi
+    root@mkosi /usr/share/mangos/self_test.sh
 then
     success
     $systemd_run -u "mangos-test-${testid}-result" -q -- echo "Mangos test ${testid} succeeded"

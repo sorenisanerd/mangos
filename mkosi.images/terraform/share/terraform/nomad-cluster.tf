@@ -97,11 +97,12 @@ locals {
 # using an OIDC token issued by Nomad.
 #
 resource "vault_jwt_auth_backend" "nomad-workload" {
-  description        = "Nomad Workload Identity authentication"
-  path               = "nomad-workload"
-  type               = "oidc"
-  oidc_discovery_url = "https://nomad.service.consul"
-  default_role       = local.nomad_workload_default_role
+  description           = "Nomad Workload Identity authentication"
+  path                  = "nomad-workload"
+  type                  = "oidc"
+  oidc_discovery_url    = "https://nomad.service.consul:4646"
+  oidc_discovery_ca_pem = local.root-ca-cert
+  default_role          = local.nomad_workload_default_role
 }
 
 #
@@ -113,7 +114,7 @@ resource "vault_jwt_auth_backend_role" "nomad-workload" {
   role_type = "jwt"
   role_name = local.nomad_workload_default_role
 
-  bound_audiences         = ["vault.${var.domain}"]
+  bound_audiences         = ["vault.io"]
   user_claim              = "/nomad_job_id"
   user_claim_json_pointer = true
   claim_mappings = {
@@ -193,7 +194,8 @@ resource "consul_acl_auth_method" "nomad-workload" {
   name = "nomad-workload"
   type = "jwt"
   config_json = jsonencode({
-    OIDCDiscoveryURL = "https://nomad.service.consul:4646"
+    OIDCDiscoveryURL    = "https://nomad.service.consul:4646"
+    OIDCDiscoveryCACert = local.root-ca-cert
     ClaimMappings = {
       nomad_namespace     = "nomad_namespace",
       nomad_job_id        = "nomad_job_id",
@@ -212,14 +214,7 @@ resource "consul_acl_auth_method" "nomad-workload" {
 resource "consul_acl_binding_rule" "nomad-workload-service" {
   auth_method = consul_acl_auth_method.nomad-workload.name
   bind_type   = "service"
-  bind_name   = "$${value.nomad_namespace}--$${value.nomad_service}"
-  selector    = "\"nomad_service\" in value"
-}
-
-resource "consul_acl_binding_rule" "nomad-workload-service-sidecar" {
-  auth_method = consul_acl_auth_method.nomad-workload.name
-  bind_type   = "service"
-  bind_name   = "$${value.nomad_namespace}--$${value.nomad_service}-sidecar-proxy"
+  bind_name   = "$${value.nomad_namespace}--$${value.nomad_job_id}"
   selector    = "\"nomad_service\" in value"
 }
 
@@ -280,3 +275,4 @@ resource "consul_acl_policy" "global-session" {
     }
     EOR
 }
+

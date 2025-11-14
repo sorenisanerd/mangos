@@ -947,11 +947,23 @@ do_bootstrap() {
 
 	do_step "Reloading confexts" chronic systemd-confext refresh
 
-	do_step "Bootstrapping Nomad via Vault" chronic run_terraform_apply -target=vault_nomad_secret_backend.nomad
+	do_step "Bootstrapping Nomad via Vault" chronic run_terraform_apply -target=vault_nomad_secret_role.management #vault_nomad_secret_backend.nomad
 
 	do_step "Starting Nomad in non-bootstrap mode" chronic systemctl start nomad
 
-	CONSUL_HTTP_TOKEN=${consul_mgmt_token} do_step "Final Terraform run" chronic run_terraform_apply
+	step "Waiting until Nomad is reachable again"
+
+	while ! curl --cacert /var/lib/nomad/ssl/ca.pem -s https://nomad.service.consul:4646/ -o /dev/null
+	do
+		echo -n "."
+		sleep 1
+	done
+	greenln Success
+
+	nomad_mgmt_token="$(VAULT_TOKEN=$(systemd-creds decrypt /var/lib/private/vault.root_token) vault read -field=secret_id nomad/creds/management)"
+	NOMAD_TOKEN="${nomad_mgmt_token}" \
+	CONSUL_HTTP_TOKEN=${consul_mgmt_token} \
+	do_step "Final Terraform run" chronic run_terraform_apply
 }
 
 set_agent_token() {
@@ -1026,15 +1038,18 @@ then
 	if [ -e "/var/lib/vault/ssl/vault.crt" ]
 	then
 		export VAULT_CACERT=/var/lib/vault/ssl/ca.pem
+		export NOMAD_CACERT=/var/lib/vault/ssl/ca.pem
 	else
 		echo "Could not find Vault CA certificate" >&2
 	fi
 
 	export VAULT_ADDR="${VAULT_ADDR:-https://vault.service.consul:8200/}"
+	export NOMAD_ADDR="${NOMAD_ADDR:-https://nomad.service.consul:4646/}"
 
 	if [ -n "$VAULT_TOKEN" ]
 	then
 		export CONSUL_HTTP_TOKEN=$(VAULT_TOKEN=$VAULT_TOKEN vault read -field=token consul/creds/management)
+		export NOMAD_TOKEN=$(VAULT_TOKEN=$VAULT_TOKEN vault read -field=secret_id nomad/creds/management)
 	fi
 	shift
 	if [ "$1" = "--" ]
