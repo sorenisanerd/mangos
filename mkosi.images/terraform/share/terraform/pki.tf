@@ -244,6 +244,7 @@ resource "vault_cert_auth_backend_role" "node" {
     token_policies = [
       vault_policy.lookup-self.name,
       vault_policy.node-cert-self-renew.name,
+      vault_policy.ssh-host-self-signer.name,
       vault_policy.consul-gossip.name,
     ]
 }
