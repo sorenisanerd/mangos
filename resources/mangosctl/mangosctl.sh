@@ -6,45 +6,71 @@ DEFAULT_DATACENTER=dc1
 set -e
 
 usage() {
-	echo 'Usage: $0 [GLOBAL OPTIONS] {install|update|enroll}'
-	echo
-	echo '  install          - install Mangos on this machine'
-	echo '  updatectl        - update an existing Mangos installation'
-	echo '  enroll           - generate a private key and CSR for this machine'
-	echo '  addext EXTENSION - pull and merge an extension (e.g. \"debug\")'
-	echo '  bootstrap        - bootstrap a Mangos installation'
-	echo '  vault	         - run vault CLI against local vault instance'
-	echo '  nomad	         - run nomad CLI against local nomad instance'
-	echo ''
-	echo 'Global options:'
-	echo '  -b, --base-url=URL       Base URL to download Mangos components from'
-	echo '  -c, --ca-cert=FILE       CA certificate to use when interacting with Mangos cluster'
-	echo '  -v, --version=VERSION    Version of Mangos to assume. Default is $IMAGE_VERSION /etc/os-release'
-	echo ''
-	echo 'SUBCOMMANDS'
-	echo ''
-	echo '  mangosctl [OPTS] bootstrap [-r|--region REGION] [--datacenter DATACENTER] [--clean]'
-	echo ''
-	echo 'Bootstraps a new Mangos cluster on this node.'
-	echo ''
-	echo '  -r, --region=REGION          Set the region for the mangos installation (default: global)'
-	echo '  -d, --datacenter=DATACENTER  Set the datacenter for the mangos installation (default: dc1)'
-	echo '  --clean                      Clean up any existing mangos installation before bootstrapping'
-	echo ''
-	echo '  mangosctl [OPTS] enroll [-gGROUP|--group GROUP] [-r|--region REGION] [--datacenter DATACENTER]'
-	echo ''
-	echo 'Options for enroll:'
-	echo '  -gGROUP, --group=GROUP        Add this node to GROUP (can be specified multiple times)'
-	echo '  -rREGION, --region=REGION     Specify the region for this node'
-	echo '  -dDATACENTER, --dc=DATACENTER Specify the datacenter for this node'
-	echo ''
-	echo 'Examples:'
-	echo ''
-	echo '  Bootstrap cluster and enroll node:'
-	echo ''
-	echo '    mangosctl bootstrap -r us-west1 -d dc1'
-	echo '    mangosctl enroll    -r us-west1 -d dc1 -g{vault-server,{nomad,consul}-{server,client}}s 127.0.0.1'
-	echo ''
+	cat <<'EOF'
+Usage: mangosctl [GLOBAL OPTIONS] {install|updatectl|enroll}
+
+  bootstrap        - bootstrap a Mangos installation
+  enroll           - generate a private key and CSR for this machine
+  updatectl        - update an existing Mangos installation
+
+Global options:
+  -b, --base-url=URL       Base URL to download Mangos components from.
+  -c, --ca-cert=FILE       CA certificate to use when interacting with Mangos cluster
+  -v, --version=VERSION    Version of Mangos to assume. Default is $IMAGE_VERSION /etc/os-release
+
+SUBCOMMANDS
+
+  SYNOPSIS
+  
+  mangosctl [OPTS] bootstrap [-r|--region REGION] [--datacenter DATACENTER] [--clean]
+
+  PURPOSE
+  
+  Bootstraps a new Mangos cluster on this node.
+
+  OPTIONS:
+    -r, --region=REGION          Set the region for the mangos installation (default: global)
+    -d, --datacenter=DATACENTER  Set the datacenter for the mangos installation (default: dc1)
+    --clean                      Clean up any existing mangos installation before bootstrapping
+
+-----------------------------------------------------------------------------------------------
+
+  SYNOPSIS
+  
+  mangosctl [OPTS] enroll [-gGROUP|--group GROUP] [-r|--region REGION] [--datacenter DATACENTER]
+  
+  Enrolls this node into an existing Mangos cluster.
+
+  OPTIONS:
+    -gGROUP, --group=GROUP        Add this node to GROUP (can be specified multiple times)
+    -rREGION, --region=REGION     Specify the region for this node
+    -dDATACENTER, --dc=DATACENTER Specify the datacenter for this node
+
+  Examples:
+
+    Bootstrap cluster and enroll node:
+
+      mangosctl bootstrap -r us-west1 -d dc1
+      mangosctl enroll    -r us-west1 -d dc1 -g{vault-server,{nomad,consul}-{server,client}}s 127.0.0.1
+
+-----------------------------------------------------------------------------------------------
+
+  SYNOPSIS
+  
+  mangosctl [OPTS] updatectl <subsubcommand>
+
+  Keep Mangos system up-to-date
+  
+  Subcommands:
+    mangosctl updatectl enable-verification  Enable verification of updates
+    mangosctl updatectl disable-verification Disable verification of updates
+    mangosctl updatectl enable FEATURE       Enable a sysupdate feature
+    mangosctl updatectl disable FEATURE      Disable a sysupdate feature
+    mangosctl updatectl ARGS...              Call `updatectl ARGS...`, refresh sysext and
+                                             confext afterwards
+
+  
+EOF
 	exit 1
 }
 
@@ -571,7 +597,7 @@ do_entity() {
 	esac
 }
 
-enable_sysupdate_extension() {
+enable_sysupdate_feature() {
 	for feature in "$@"
 	do
 		mkdir -p "/run/sysupdate.d/${feature}.feature.d"
@@ -580,48 +606,28 @@ enable_sysupdate_extension() {
 }
 
 do_updatectl() {
-	if [ "$1" = "enable" ]
-	then
-		shift
-		enable_sysupdate_extension "$@"
-		return
-	fi
-	for d in /usr/lib/sysupdate*.d/*.transfer
-	do
-		mkdir -p "/run/${d#/usr/lib/}.d"
-		cat <<EOF >> "/run/${d#/usr/lib/}.d/override.conf"
-[Source]
-Path=${BASE_URL}
-[Transfer]
-Verify=no
-EOF
-	done
-
-	args="$(getopt -o 'c:' --long 'component:' -n 'mangosctl update' -- "$@")"
-	if [ $? != 0 ]
-	then
-		echo "Error parsing arguments" >&2
-		usage
-	fi
-
-	eval set -- "${args}"
-	while true
-	do
-		case "$1" in
-			-c|--component)
-				defs="${tmpdir}/sysupdate.${2}.d"
-				shift 2
-				;;
-			--)
-				shift
-				break
-				;;
-			*)
-				echo "Error parsing arguments" >&2
-				usage
-				;;
-		esac
-	done
+	case "$1" in
+		enable)
+			shift
+			enable_sysupdate_feature "$@"
+			return
+			;;
+		disable-verification)
+			for d in /usr/lib/sysupdate*.d/*.transfer
+			do
+				mkdir -p "/run/${d#/usr/lib/}.d"
+				cat <<-EOF > "/run/${d#/usr/lib/}.d/no-verify.conf"
+				[Transfer]
+				Verify=no
+				EOF
+			done
+			return
+			;;
+		enable-verification)
+			rm -f /run/sysupdate*.d/*.transfer.d/no-verify.conf
+			return
+			;;
+	esac
 
 	updatectl "$@"
 
