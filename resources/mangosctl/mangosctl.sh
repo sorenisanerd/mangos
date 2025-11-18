@@ -519,14 +519,14 @@ do_enroll() {
 		greenln Success
 	fi
 
-	do_step "Reloading confexts" chronic systemd-confext refresh
+	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
 
 	step "Merging /etc/environment.d/20-mangos.conf into /etc/environment"
 	cat /etc/environment /etc/environment.d/20-mangos.conf | sort -u > ${confext_dir}/etc/environment.new
 	mv ${confext_dir}/etc/environment.new ${confext_dir}/etc/environment
 	greenln Success
 
-	do_step "Reloading confexts" chronic systemd-confext refresh
+	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
 }
 
 do_group() {
@@ -624,8 +624,9 @@ EOF
 	done
 
 	updatectl "$@"
-	systemd-sysext refresh
-	systemd-confext refresh
+
+	systemd-sysext refresh --mutable=auto
+	systemd-confext refresh --mutable=auto
 	systemctl daemon-reload
 
 	if is_efi
@@ -746,7 +747,7 @@ do_bootstrap() {
 	green Done
 	echo 
 
-	do_step "Merging Hashistack sysext" chronic systemd-sysext refresh
+	do_step "Merging Hashistack sysext" chronic systemd-sysext refresh --mutable=auto
 
 	do_step "Reloading systemd" systemctl daemon-reload
 
@@ -821,7 +822,7 @@ do_bootstrap() {
 		-config /usr/share/consul-template/conf/nomad-certs.hcl
 	EOF
 
-	do_step "Refreshing confexts" chronic systemd-confext refresh
+	do_step "Refreshing confexts" chronic systemd-confext refresh --mutable=auto
 
 	do_step "Restarting Vault in non-bootstrap mode" chronic systemctl start vault
 
@@ -869,7 +870,7 @@ do_bootstrap() {
 	systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/consul.agent_recovery <<<${agent_recovery_token}
 	greenln Success
 
-	do_step "Reloading confexts" chronic systemd-confext refresh
+	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
 
 	do_step "Launching Consul in non-bootstrap mode" chronic systemctl start consul
 
@@ -898,7 +899,7 @@ do_bootstrap() {
 
 	echo VAULT_ADDR=https://vault.service.consul:8200 >> ${confext_dir}/etc/environment.d/20-mangos.conf
 
-	do_step "Reloading confexts" chronic systemd-confext refresh
+	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
 	do_step "Restarting Vault" chronic systemctl restart vault
 
 	step "Creating Consul token for Nomad server"
@@ -911,7 +912,7 @@ do_bootstrap() {
                         -format=json | jq .SecretID -r | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/nomad.consul_token
 	greenln Success
 
-	do_step "Reloading confexts" chronic systemd-confext refresh
+	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
 
 	mkdir -p /run/nomad
 	systemd-creds decrypt ${confext_dir}/etc/credstore.encrypted/nomad.consul_token | jq -R '{consul:{token:.}}' > /run/nomad/consul-agent.json
@@ -950,7 +951,7 @@ do_bootstrap() {
 	export NOMAD_ADDR=https://nomad.service.consul:4646
 	export NOMAD_CACERT=/var/lib/nomad/ssl/ca.pem
 
-	do_step "Reloading confexts" chronic systemd-confext refresh
+	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
 
 	do_step "Bootstrapping Nomad via Vault" chronic run_terraform_apply -target=vault_nomad_secret_role.management #vault_nomad_secret_backend.nomad
 
@@ -1028,7 +1029,7 @@ do_addext() {
 	fi
 
 	wget --progress=dot:giga -O /var/lib/extensions/"${image_file_name}" "${BASE_URL}/${image_file_name}"
-	systemd-sysext refresh
+	systemd-sysext refresh --mutable=auto
 }
 
 if [ "$1" = "sudo" ]

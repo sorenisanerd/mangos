@@ -3,7 +3,7 @@ Description=Mangos unit to keep other Mangos stuff running
 
 [Service]
 Type=oneshot
-ExecStart=systemd-sysext refresh
+ExecStart=systemd-sysext refresh --mutable=auto
 ExecStart=systemctl reload systemd-resolved
 ExecStart=systemctl daemon-reload
 RemainAfterExit=yes
