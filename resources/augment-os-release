@@ -1,3 +1,6 @@
-#!/bin/sh
+#!/bin/bash
+
+sed -e 's/^PRETTY_NAME=.*/PRETTY_NAME="'"${IMAGE_ID@u} ${IMAGE_VERSION}"'"/g' -i ${BUILDROOT}/usr/lib/os-release
+
 echo MANGOS_GITHUB_URL="${MANGOS_GITHUB_URL}" >> ${BUILDROOT}/usr/lib/os-release
 echo MKOSI_SERVE_URL="${MKOSI_SERVE_URL}" >> ${BUILDROOT}/usr/lib/os-release
