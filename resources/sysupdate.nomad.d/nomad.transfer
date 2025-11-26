@@ -8,7 +8,7 @@ MatchPattern=nomad_@v.raw \
 
 [Target]
 Type=regular-file
-Path=/var/lib/extensions
+Path=/var/lib/extensions/nomad.raw.v/
 InstancesMax=2
 MatchPattern=nomad_@v.raw
 Mode=0444

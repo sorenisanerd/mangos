@@ -5,7 +5,7 @@ from urllib import request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import urlparse
 
-sha256sums = ''
+sha256sums = {}
 
 def os_release_to_dict(fname='/usr/lib/os-release'):
     result = {}
@@ -19,54 +19,78 @@ def os_release_to_dict(fname='/usr/lib/os-release'):
 
 os_release = os_release_to_dict()
 
+github_url = 'https://github.com/Mastercard/mangos'
 
 if 'MANGOS_GITHUB_URL' in os_release:
     github_url = os_release['MANGOS_GITHUB_URL']
-    repo_full = '/'.join(github_url.split('/')[-2:])
+
+default_repo_full = '/'.join(github_url.split('/')[-2:])
 
 
 class MangosHandler(BaseHTTPRequestHandler):
+    protocol_version = 'HTTP/1.1'
+
     def do_GET(self):
         global sha256sums
         parsed_path = urlparse(self.path)
         path = parsed_path.path.lstrip('/')
+        matches = re.match('^([^/]*/[^/]*)/[^/]*$', path)
 
-# /usr/lib/systemd/systemd-sysupdate
-# journalctl -u mangos-sd-gh-proxy.service
+        if matches:
+            repo_full = matches.group(1)
+        else:
+            if "MKOSI_SERVE_URL" in os_release:
+                url = f'{os_release["MKOSI_SERVE_URL"]}/{path}'
+                self.send_response(302)
+                self.send_header('Location', url)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                return
+            repo_full = default_repo_full
 
-        if path == 'SHA256SUMS':
-            if not sha256sums:
+        if path.endswith('SHA256SUMS'):
+            if not repo_full in sha256sums:
                 url = f'https://api.github.com/repos/{repo_full}/releases'
                 with request.urlopen(url) as resp:
                     data = json.load(resp)
+                sha256sums[repo_full] = ''
                 for release in data:
                     for asset in release['assets']:
                         digest = asset.get("digest", "")
                         name = asset.get("name", "")
+                        if name.endswith('sigbundle'):
+                            continue
                         if digest.startswith("sha256:"):
-                            sha256sums += f'{digest[7:]} *{name}\n'
+                            sha256sums[repo_full] += f'{digest[7:]} *{name}\n'
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain')
+
+            body_bytes = sha256sums[repo_full].encode()
+            self.send_header('Content-Length', str(len(body_bytes)))
             self.end_headers()
-            self.wfile.write(sha256sums.encode())
+
+            self.wfile.write(body_bytes)
             return
 
         # Handle file redirect
-        filename = path
+        filename = path.split('/')[-1]
         version = filename.split('_')[1] if '_' in filename else filename
+        if version.endswith('.sigbundle'):
+            version = version[:-10]
         for ext in ['.gz', '.zst']:
             if version.endswith(ext):
                 version = version[:-len(ext)]
                 break
-        for ext in ['.efi', '.cyclonedx.json', '.github.json', '.raw', '.spdx.json', '.syft.json']:
+        for ext in ['.tar', '.efi', '.cyclonedx.json', '.github.json', '.raw', '.spdx.json', '.syft.json']:
             if version.endswith(ext):
                 version = version[:-len(ext)]
                 break
         version = re.sub(r'\.root-x86-64(-verity(-sig)?)?\.[a-z0-9]{32}$', '', version)
 
-        redirect_url = f'{github_url}/releases/download/v{version}/{filename}'
+        redirect_url = f'https://github.com/{repo_full}/releases/download/v{version}/{filename}'
         self.send_response(302)
         self.send_header('Location', redirect_url)
+        self.send_header('Content-Length', '0')
         self.end_headers()
 
 def main():

@@ -12,7 +12,7 @@ MatchPattern=debug_@v.raw \
 
 [Target]
 Type=regular-file
-Path=/var/lib/extensions
+Path=/var/lib/extensions/debug.raw.v/
 InstancesMax=2
 MatchPattern=debug_@v.raw
 Mode=0444

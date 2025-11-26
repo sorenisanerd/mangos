@@ -30,6 +30,7 @@ resource "vault_ssh_secret_backend_role" "host-self" {
   name                     = "host-self"
   allow_host_certificates  = true
   allowed_domains          = "{{identity.entity.aliases.${vault_auth_backend.node-cert.accessor}.name}}"
+  allow_bare_domains       = true
   allowed_domains_template = true
   allow_subdomains         = false
   key_type                 = "ca"
@@ -40,7 +41,7 @@ resource "vault_ssh_secret_backend_role" "host-self" {
 # Allow nodes to get SSH host keys signed for any domain.
 #
 resource "vault_policy" "ssh-host-self-signer" {
-  name   = "ssh-host-signer"
+  name   = "ssh-host-self-signer"
   policy = <<-EOP
     path "ssh/config/ca" {
       capabilities = ["read"]
