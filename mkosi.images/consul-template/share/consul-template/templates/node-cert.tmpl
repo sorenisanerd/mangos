@@ -6,8 +6,9 @@
 {{-   $csrPath = printf "/var/lib/mangos/mangos.csr" -}}
 {{- end -}}
 {{- with $csr := file $csrPath -}}
-{{-   $hostname := env "HOSTNAME" -}}
-{{-   with pkiCert "pki-nodes/sign/node-cert-self"
+{{-   $hostname    := env "HOSTNAME" -}}
+{{-   $signingRole := envOrDefault "NODE_CERT_SIGNING_ROLE" "node-cert-self" -}}
+{{-   with pkiCert (printf "pki-nodes/sign/%s" $signingRole)
         (printf "common_name=%s.mangos" $hostname)
         (printf "csr=%s" $csr) -}}
 {{-     .Cert -}}
