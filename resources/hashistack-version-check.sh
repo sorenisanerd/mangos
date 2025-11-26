@@ -4,6 +4,6 @@ binary_version=$(${BUILDROOT}/usr/bin/${SUBIMAGE} --version |& head -n1 | grep -
 binary_version=${binary_version#v}
 
 echo $IMAGE_VERSION | grep -qE "^${binary_version}(-|$)" || {
-    echo "Error: Consul binary version (${binary_version}) does not match image version (${IMAGE_VERSION})" >&2
+    echo "Error: ${SUBIMAGE} binary version (${binary_version}) does not match image version (${IMAGE_VERSION})" >&2
     exit 1
 }

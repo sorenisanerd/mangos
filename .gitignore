@@ -13,3 +13,6 @@
 mkosi.local
 mkosi.local.conf
 /*.log
+/*.zip
+/*.tgz
+**/.*.swp
