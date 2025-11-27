@@ -14,7 +14,7 @@ do
 
 	info=""
 
-	if [ "${latest_release}" != "${from_mkosi_version}" ]
+	if [ "${latest_release}" != "${from_mkosi_version}" ] || [ "${binary_version}" != "${from_mkosi_version}" ]
 	then
 		info="MISMATCH"
 	fi
