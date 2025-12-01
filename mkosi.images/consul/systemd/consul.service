@@ -14,11 +14,16 @@ EnvironmentFile=/etc/environment.d/20-mangos.conf
 ExecStartPre=sh -c "jq -n '{datacenter:env.CONSUL_DATACENTER}' > ${RUNTIME_DIRECTORY}/datacenter.json"
 ExecStartPre=sh -c "jq -R '{acl:{tokens:{agent_recovery:.}}}' ${CREDENTIALS_DIRECTORY}/consul.agent_recovery > ${RUNTIME_DIRECTORY}/agent_recovery.json"
 
+# Use the subject of Consul's certificate to enable/disable server mode.
+ExecStartPre=sh -c "(openssl x509 -in /var/lib/consul/ssl/consul.crt -subject -noout | grep -q CN=server && echo true || echo false) | jq '{server:.}' > ${RUNTIME_DIRECTORY}/server.json"
+
+
 ExecStart=/usr/bin/consul agent \
             -retry-join 127.0.0.1 \
             -config-dir=/usr/share/consul/ \
             -config-file=${RUNTIME_DIRECTORY}/datacenter.json \
-            -config-file=${RUNTIME_DIRECTORY}/agent_recovery.json
+            -config-file=${RUNTIME_DIRECTORY}/agent_recovery.json \
+            -config-file=${RUNTIME_DIRECTORY}/server.json
 
 ExecReload=/bin/kill --signal HUP $MAINPID
 StateDirectory=consul/data consul/ssl

@@ -5,7 +5,6 @@ tls {
   }
 }
 
-server   = true
 data_dir = "/var/lib/consul/data"
 
 # The real encryption key is provided during
