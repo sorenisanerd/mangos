@@ -23,6 +23,8 @@ acl {
 bind_addr      = "0.0.0.0"
 advertise_addr = "{{ GetPrivateInterfaces | exclude \"name\" \"docker\" | attr \"address\" }}"
 
+rejoin_after_leave = true
+
 ports {
   https     = 8501
   grpc      = 8502
