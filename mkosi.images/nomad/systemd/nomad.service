@@ -15,10 +15,8 @@ EnvironmentFile=/etc/environment.d/20-mangos.conf
 ExecStartPre=sh -c "jq -n '{region:env.NOMAD_REGION,datacenter:env.NOMAD_DATACENTER}' > ${RUNTIME_DIRECTORY}/dc-region.json"
 ExecStartPre=sh -c "jq -R '{consul:{token:.}}' ${CREDENTIALS_DIRECTORY}/nomad.consul_token > ${RUNTIME_DIRECTORY}/consul.json"
 
-# Use the presence of the "nomad-server" service identity on the Consul
-# token to enable/disable server mode.
-ExecStartPre=sh -c "consul acl token read -token-file ${CREDENTIALS_DIRECTORY}/nomad.consul_token -self -format=json | \
-                    jq '{server:{enabled:([.ServiceIdentities[].ServiceName] | contains([\"nomad-server\"]))}}' > ${RUNTIME_DIRECTORY}/server.json"
+# Use the subject of Nomad's certificate to enable/disable server mode.
+ExecStartPre=sh -c "(openssl x509 -in /var/lib/nomad/ssl/nomad.crt -subject -noout | grep -q CN=server && echo true || echo false) | jq '{server:{enabled:.}}' > ${RUNTIME_DIRECTORY}/server.json"
 
 ExecStart=/usr/bin/nomad agent \
 	-config /usr/share/nomad \
