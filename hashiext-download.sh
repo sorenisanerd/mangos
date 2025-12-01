@@ -35,6 +35,8 @@ download() {
     wget -O SHA256SUMS "${sha256sums}"
     wget -O SHA256SUMS.sig "${sha256sums_sig}"
 
+    export GNUPGHOME=$(mktemp -d)
+    trap 'rm -rf $GNUPG_HOME' EXIT
     if ! gpg --verify --no-default-keyring --keyring ${origdir}/resources/hashicorp-signing-key.72D7468F.gpg SHA256SUMS.sig SHA256SUMS
     then
         echo "GPG signature verification failed!"
