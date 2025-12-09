@@ -19,6 +19,7 @@ download() {
     fi
 
     version="${version#v}"
+    version="${version% *}"
 
     origdir="$(pwd)"
     tmpdir=$(mktemp -d)
