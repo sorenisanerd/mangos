@@ -3,7 +3,7 @@ Type=url-file
 Path=http://localhost:1002/
 MatchPattern=docker_@v.raw \
              docker_@v.raw.gz \
-             docker_@v.raw.zstd \
+             docker_@v.raw.zst \
              docker_@v.raw.xz
 
 [Target]

@@ -3,7 +3,7 @@ Type=url-file
 Path=http://localhost:1002/
 MatchPattern=vault_@v.raw \
              vault_@v.raw.gz \
-             vault_@v.raw.zstd \
+             vault_@v.raw.zst \
              vault_@v.raw.xz \
 
 [Target]

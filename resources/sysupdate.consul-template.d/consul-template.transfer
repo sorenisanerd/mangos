@@ -3,7 +3,7 @@ Type=url-file
 Path=http://localhost:1002/
 MatchPattern=consul-template_@v.raw \
              consul-template_@v.raw.gz \
-             consul-template_@v.raw.zstd \
+             consul-template_@v.raw.zst \
              consul-template_@v.raw.xz \
 
 [Target]

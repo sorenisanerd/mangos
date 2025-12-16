@@ -7,7 +7,7 @@ Type=url-file
 Path=http://localhost:1002/
 MatchPattern=debug_@v.raw \
              debug_@v.raw.gz \
-             debug_@v.raw.zstd \
+             debug_@v.raw.zst \
              debug_@v.raw.xz \
 
 [Target]

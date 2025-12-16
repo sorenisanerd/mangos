@@ -3,7 +3,7 @@ Type=url-file
 Path=http://localhost:1002/
 MatchPattern=nomad_@v.raw \
              nomad_@v.raw.gz \
-             nomad_@v.raw.zstd \
+             nomad_@v.raw.zst \
              nomad_@v.raw.xz \
 
 [Target]

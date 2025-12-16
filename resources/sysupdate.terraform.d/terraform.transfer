@@ -3,7 +3,7 @@ Type=url-file
 Path=http://localhost:1002/
 MatchPattern=terraform_@v.raw \
              terraform_@v.raw.gz \
-             terraform_@v.raw.zstd \
+             terraform_@v.raw.zst \
              terraform_@v.raw.xz \
 
 [Target]
