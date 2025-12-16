@@ -1,6 +1,5 @@
-#!/bin/sh
+#!/bin/bash
 
-install_source="$(systemd-creds cat mangos_install_source 2> /dev/null)"
 install_target="$(systemd-creds cat mangos_install_target 2> /dev/null)"
 
 while [ $# -gt 0 ]
@@ -9,15 +8,11 @@ do
         -h|--help)
             echo 'usage: mangos-install [BLOCK_DEVICE|ask]'
             echo
-            echo 'Downloads and installs MANGOS onto BLOCK_DEVICE.'
+            echo 'Installs MANGOS onto BLOCK_DEVICE.'
             echo
             echo 'If called without arguments or with a single argument "ask",'
             echo 'a dialog will be presented with a list of detected block devices.'
             exit 0
-            ;;
-        -s)
-            install_source="$2"
-            shift 2
             ;;
         -n|--dry-run)
             echo="/bin/echo --"
@@ -51,52 +46,66 @@ then
         install_target="$(cat /tmp/mangos_install_target ; rm /tmp/mangos_install_target)"
 fi
 
-if [ -z "${install_source}" ]
-then
-    source="$(sed -e 's%.*mangos_install_source=\([^ ]\+\).*%\1%' /proc/cmdline)"
-    if [ -n "${source}" ]
-    then
-        install_source="${source}"
-    fi
-fi
+# Get the partition UUID for the ESP we booted from. Set by the
+# kernel EFI stub.
+boot_uuid="$(cat /sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f | tail -c +5 | head -c 72 | iconv -f UCS2 -t UTF-8)"
 
-if [ -z "${install_source}" ]
-then
-    . /etc/os-release
+# Mount it at /boot
+mkdir /boot
+mount /dev/disk/by-partuuid/${boot_uuid@L} /boot
 
-    install_source="${MANGOS_GITHUB_URL}/releases/download/v${IMAGE_VERSION}/mangos_${IMAGE_VERSION}.raw.zst"
-fi
+# Apply the partition table to the target device.
+$echo systemd-repart --dry-run=no --empty=force --defer-partitions=swap,tmp,var --root=/ --definitions=/usr/lib/repart.installer.d "${install_target}"
 
-$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw "${install_source}" "$install_target"
+# It would be neat if we coould use sd-sysypdate for the root partition, too,
+# but if there's not existing root partition on its target device, it bails.
+# Hence, we use systemd-pull to handle the root image.
+rootimg="$(ls /boot/imgs/mangos_*.root-x86-64.*.raw.zst)"
+$echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw file://${rootimg} "${install_target}5"
 
-$echo sgdisk -p "${install_target}"
-$echo sgdisk -v "${install_target}"
-# -e: There are two copies of the GPT on a block device. One at the
-#     start and one at the end. Since the image and the device are
-#     unlikely to be the exact same size, we need to put a new copy at
-#     the end.
-# -U: Set disk GUID
-$echo sgdisk -e \
-    -U "$(systemd-id128 new -u)" \
-    -u "1:$(systemd-id128 new -u)" \
-    -p "${install_target}" \
+# Extract partition UUID and set partition name from the filename.
+partuuid="$(basename ${rootimg##*.root-x86-64.} .raw.zst)"
+partname="${rootimg##*/}"
+partname="${partname%.*.*.*.*}"
 
-$echo sgdisk -v "${install_target}"
-sync ; sync
+# Apply it to the partition.
+$echo sgdisk -u "5:${partuuid}" -c "5:${partname}" ${install_target}
+
+# Now let sysupdate handle the other partitions.
+$echo /usr/lib/systemd/systemd-sysupdate --definitions=/usr/share/mangos-install/sysupdate.local.d/ --image="${install_target}" --transfer-source=/boot/imgs update
+
+busybox partprobe ${install_target}
 
 mount "${install_target}5" /mnt
 mount "${install_target}1" /mnt/boot
 
-# Add ip= kernel arg to grub config
-ip_arg="$(grep -oE 'ip=[^ ]+' /proc/cmdline)"
-nameserver_arg="$(grep -oE 'nameserver=[^ ]+' /proc/cmdline)"
+tmpfile=$(mktemp)
 
-sed -e "s%^.*linux .*%& ${ip_arg} ${nameserver_arg}%g" -i /mnt/boot/grub/grub.cfg
+# bootctl insists on writing to /etc/kernel/entry-token, so we
+mount -o bind $tmpfile /mnt/etc/kernel/entry-token
 
-touch /dev/shm/entry-token
-mount -o bind /dev/shm/entry-token /mnt/etc/kernel/entry-token
-bootctl install --root=/mnt --variables=yes
+# so that we can
+$echo bootctl install --variables=yes --root=/mnt
+
+# and then we just
 umount /mnt/etc/kernel/entry-token
+    
+# but now `bootctl install` has overwritten our signed bootloder,
+# so we put it right back by 
+cp /boot/EFI/BOOT/BOOTX64.EFI /mnt/boot/EFI/BOOT/BOOTX64.EFI
+cp /boot/EFI/BOOT/BOOTX64.EFI /mnt/boot/EFI/systemd/systemd-bootx64.efi
+
+if [ ! -f /sys/firmware/efi ]
+then
+    ip_arg="$(grep -oE 'ip=[^ ]+' /proc/cmdline)"
+    nameserver_arg="$(grep -oE 'nameserver=[^ ]+' /proc/cmdline)"
+
+    sed -e "s%^.*linux .*%& ${ip_arg} ${nameserver_arg}%g" -i /mnt/boot/grub/grub.cfg
+
+    $echo /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw /imgs/*.grub.raw "${install_target}"
+fi
+
 umount /mnt/boot
 umount /mnt
+umount /boot
 sync ; sync
