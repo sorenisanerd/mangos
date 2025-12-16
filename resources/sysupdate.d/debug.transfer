@@ -4,7 +4,7 @@ Features=debug
 
 [Source]
 Type=url-file
-Path=http://localhost:1002/
+Path=http://mangos.soren.tools/sysupdate/mangos
 MatchPattern=debug_@v.raw \
              debug_@v.raw.gz \
              debug_@v.raw.zst \

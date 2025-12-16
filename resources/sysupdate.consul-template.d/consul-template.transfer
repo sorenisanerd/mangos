@@ -1,6 +1,6 @@
 [Source]
 Type=url-file
-Path=http://localhost:1002/
+Path=http://mangos.soren.tools/sysupdate/consul-template
 MatchPattern=consul-template_@v.raw \
              consul-template_@v.raw.gz \
              consul-template_@v.raw.zst \

@@ -1,6 +1,6 @@
 [Source]
 Type=url-file
-Path=http://localhost:1002/
+Path=http://mangos.soren.tools/sysupdate/nomad
 MatchPattern=nomad_@v.raw \
              nomad_@v.raw.gz \
              nomad_@v.raw.zst \

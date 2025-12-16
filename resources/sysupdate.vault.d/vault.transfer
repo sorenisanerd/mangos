@@ -1,6 +1,6 @@
 [Source]
 Type=url-file
-Path=http://localhost:1002/
+Path=http://mangos.soren.tools/sysupdate/vault
 MatchPattern=vault_@v.raw \
              vault_@v.raw.gz \
              vault_@v.raw.zst \

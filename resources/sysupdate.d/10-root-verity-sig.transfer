@@ -3,7 +3,7 @@ ProtectVersion=%A
 
 [Source]
 Type=url-file
-Path=http://localhost:1002/
+Path=http://mangos.soren.tools/sysupdate/mangos
 MatchPattern=%M_@v.root-%a-verity-sig.@u.raw \
              %M_@v.root-%a-verity-sig.@u.raw.gz \
              %M_@v.root-%a-verity-sig.@u.raw.zst \
