@@ -267,7 +267,7 @@ if $systemd_run -d --wait -q -p StandardOutput=journal -- ssh -i ./mkosi.key \
     -o StrictHostKeyChecking=no \
     -o LogLevel=ERROR \
     -o ProxyCommand="mkosi sandbox -- socat - VSOCK-CONNECT:42:%p" \
-    root@mkosi /usr/share/mangos/self_test.sh
+    root@mkosi 'mangosctl updatectl add-overrides ; /usr/share/mangos/self_test.sh'
 then
     success
     $systemd_run -u "mangos-test-${testid}-result" -q -- echo "Mangos test ${testid} succeeded"
