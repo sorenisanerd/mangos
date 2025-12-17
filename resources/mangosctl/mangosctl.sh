@@ -75,7 +75,7 @@ EOF
 }
 
 main() {
-	args="$(getopt -o '+b:c:v:' --long 'base-url:ca-cert:version:' -n 'mangosctl' -- "$@")"
+	args="$(getopt -o '+b:c:v:' --long 'base-url:,ca-cert:,version:' -n 'mangosctl' -- "$@")"
 	if [ $? != 0 ]
 	then
 		echo "Error parsing arguments" >&2
@@ -333,7 +333,7 @@ do_enroll() {
 		DATACENTER="$(. /etc/environment.d/20-mangos.conf ; echo ${NOMAD_DATACENTER})"
 	fi
 
-	args="$(getopt -o 'g:r:d:' --long 'group:region:dc:datacenter:' -n 'mangosctl enroll' -- "$@")"
+	args="$(getopt -o 'g:r:d:' --long 'group:,region:,dc:,datacenter:' -n 'mangosctl enroll' -- "$@")"
 	if [ $? != 0 ]
 	then
 		echo "Error parsing arguments" >&2
