@@ -78,6 +78,20 @@ jobs:
           cat <<EOF > mkosi.key
           $MANGOS_KEY
           EOF
+      - name: Inject GnuPG key
+        env:
+          MANGOS_GNUPG_KEY: ${{ secrets.MANGOS_GNUPG_KEY }}
+        run: |
+          set -e
+          if [ -z "${MANGOS_GNUPG_KEY}" ]; then
+              echo '::warning title=Missing key::`MANGOS_GNUPG_KEY` was not set. Generating temporary key.'
+              echo '`MANGOS_GNUPG_KEY` was not set. Build performed with ephemeral key.' >> ${GITHUB_STEP_SUMMARY}
+              GNUPGHOME=$(pwd)/.gnupg gpg --batch --passphrase '' --quick-generate-key "ephemeral github.com/${GITHUB_REPOSITORY} signing Key"
+              exit 0
+          fi
+          GNUPGHOME=$(pwd)/.gnupg gpg --batch --import <<EOF
+          $MANGOS_GNUPG_KEY
+          EOF
       - name: Download Hashistack
         run: |
           ./hashiext-download.sh
@@ -87,7 +101,6 @@ jobs:
           MANGOS_GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile="${profiles},hashistack"
-          mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile="${profiles},installer"
       - name: List built artifacts
         run: find out/
       - name: Export image version for later steps

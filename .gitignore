@@ -9,6 +9,8 @@
 /mkosi.packages
 /gpg
 /*.acast
+/.gnupg
+/dist
 /resources/cni/**
 mkosi.local
 mkosi.local.conf

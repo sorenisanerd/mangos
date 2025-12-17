@@ -90,8 +90,12 @@ systemd_run="systemd-run --user --slice ${slice}"
 
 trap "echo exit code: $?; systemctl --user stop mangos-test-${testid}.slice; journalctl --no-pager --user -u ${slice}" EXIT
 
+step 'Publish build to sysupdate dir'
+SYSUPDATE_DISTDIR=$(pwd)/dist/sysupdate resources/publish-build 
+report_outcome
+
 step 'Launch web server (mkosi serve)'
-$systemd_run -u "mangos-test-${testid}-serve" -q -d -- mkosi serve
+$systemd_run -u "mangos-test-${testid}-serve" -q --working-directory $(pwd)/dist -- python3 -m http.server 8081
 report_outcome
 
 tmpdir="$(mktemp -d)"
@@ -224,12 +228,14 @@ report_outcome
 mkosi box -- patch -N mkosi.tools/usr/lib/python3/dist-packages/virt/firmware/vars.py virt-firmware.patch || true
 
 mkosi box -- virt-fw-vars --inplace "${tmpdir}/efivars.fd" --append-boot-filepath "EFI/Linux/mangos_${IMAGE_VERSION}.efi @1 "
-mkosi box -- virt-fw-vars --inplace "${tmpdir}/efivars.fd" --set-json <(virt-fw-vars -i "${tmpdir}/efivars.fd" --output-json - 2> /dev/null | jq '{variables:[.variables as $vars | $vars[] | select(.name=="BootOrder") as $BootOrder | $BootOrder + {data:($vars[] | select(.data | test("'$(echo -n mangos | iconv -f ascii -t UCS2 | xxd -p)'")) | .name | capture("(?<num>..)$") | (.num + "00" + $BootOrder.data))}]}')
-mkosi box -- virt-fw-vars -i "${tmpdir}/efivars.fd" -pv
+
+varsjson="$(mktemp)"
+
+mkosi box -- virt-fw-vars -i "${tmpdir}/efivars.fd" --output-json - 2> /dev/null | jq '{variables:[.variables as $vars | $vars[] | select(.name=="BootOrder") as $BootOrder | $BootOrder + {data:($vars[] | select(.data | test("'$(echo -n mangos | iconv -f ascii -t UCS2 | xxd -p)'")) | .name | capture("(?<num>..)$") | (.num + "00" + $BootOrder.data))}]}' > "${varsjson}"
+mkosi box -- virt-fw-vars --inplace "${tmpdir}/efivars.fd" --set-json "${varsjson}"
 
 step 'Run VM (install mangos)'
 run -smbios type=11,value=io.systemd.credential:mangos_install_target=/dev/vdb \
-    -smbios type=11,value=io.systemd.credential:mangos_install_source=http://10.0.2.2:8081/mangos_${IMAGE_VERSION}.raw \
     --blockdev=installer:"${installer}" \
     --blockdev=persistent:"${target_disk}" --wait
 report_outcome

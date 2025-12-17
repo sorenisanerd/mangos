@@ -60,6 +60,7 @@ jobs:
         run: |
           #!/bin/sh
           mkosi genkey
+          GNUPGHOME=$(pwd)/.gnupg gpg --batch --passphrase '' --quick-generate-key "test key"
       - name: Download Hashistack
         run: |
           ./hashiext-download.sh
@@ -69,7 +70,6 @@ jobs:
           MANGOS_GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile="${profiles},hashistack"
-          mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile="${profiles},installer"
       - name: List built artifacts
         run: find out/
       - name: Export image version for later steps

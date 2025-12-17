@@ -623,6 +623,17 @@ do_updatectl() {
 			done
 			return
 			;;
+		add-overrides)
+			for d in /usr/lib/sysupdate*.d/*.transfer
+			do
+				mkdir -p "/run/${d#/usr/lib/}.d"
+				cat <<-EOF > "/run/${d#/usr/lib/}.d/source-path-override.conf"
+				[Source]
+				Path=${BASE_URL}/sysupdate$(grep 'Path=http:' ${d} | sed -e 's%\(.*\)/sysupdate%%g')
+				EOF
+			done
+			return
+			;;
 		enable-verification)
 			rm -f /run/sysupdate*.d/*.transfer.d/no-verify.conf
 			return
@@ -849,7 +860,7 @@ do_bootstrap() {
 		-retry-join 127.0.0.1 \
 		-config-dir=/usr/share/consul/ \
 		-datacenter "${REGION}-${DATACENTER}" \
-		-config-file=${enckey} -bootstrap
+		-config-file=${enckey} -bootstrap -server
 
 	mkdir -p ${confext_dir}/etc/environment.d
 	echo CONSUL_DATACENTER=${REGION}-${DATACENTER} >> ${confext_dir}/etc/environment.d/20-mangos.conf
