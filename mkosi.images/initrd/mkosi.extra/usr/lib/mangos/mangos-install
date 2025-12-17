@@ -55,7 +55,7 @@ mkdir /boot
 mount /dev/disk/by-partuuid/${boot_uuid@L} /boot
 
 # Apply the partition table to the target device.
-$echo systemd-repart --dry-run=no --empty=force --defer-partitions=swap,tmp,var --root=/ --definitions=/usr/lib/repart.installer.d "${install_target}"
+$echo systemd-repart --dry-run=no --empty=force --defer-partitions=swap,tmp,var --root=/ --definitions=/usr/lib/repart.d "${install_target}"
 
 # It would be neat if we coould use sd-sysypdate for the root partition, too,
 # but if there's not existing root partition on its target device, it bails.
@@ -95,7 +95,7 @@ umount /mnt/etc/kernel/entry-token
 cp /boot/EFI/BOOT/BOOTX64.EFI /mnt/boot/EFI/BOOT/BOOTX64.EFI
 cp /boot/EFI/BOOT/BOOTX64.EFI /mnt/boot/EFI/systemd/systemd-bootx64.efi
 
-if [ ! -f /sys/firmware/efi ]
+if [ ! -e /sys/firmware/efi ]
 then
     ip_arg="$(grep -oE 'ip=[^ ]+' /proc/cmdline)"
     nameserver_arg="$(grep -oE 'nameserver=[^ ]+' /proc/cmdline)"

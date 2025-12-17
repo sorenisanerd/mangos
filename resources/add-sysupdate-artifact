@@ -1,0 +1,32 @@
+#!/bin/bash
+
+if [ "${MKOSI_DEBUG:-}" = "1" ]
+then
+    set -x
+fi
+
+component="$1"
+version="$2"
+
+shift 2
+
+sysupdate_publish_dir=${SYSUPDATE_DISTDIR:-/var/lib/dist/sysupdate}
+mkdir -p "${sysupdate_publish_dir}/${component}/${version}"
+
+for f in "$@"
+do
+        dpath="${sysupdate_publish_dir}/${component}/${version}/$(basename "${f}")"
+        if test -e "${dpath}"
+        then
+                echo "File already exists: ${dpath}. Skipping."
+                continue
+        fi
+        cp "${f}" "${sysupdate_publish_dir}/${component}/${version}"
+
+        (cd "${sysupdate_publish_dir}/${component}" ; ln -s "${version}/$(basename "${f}")")
+        (cd "${sysupdate_publish_dir}/${component}/${version}" ; sha256sum "$(basename "${f}")" >> SHA256SUMS)
+
+done
+
+cd "${sysupdate_publish_dir}/${component}"
+cat */SHA256SUMS > SHA256SUMS

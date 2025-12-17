@@ -250,9 +250,9 @@ resource "consul_acl_binding_rule" "nomad-workload-nomad-workload" {
 resource "consul_acl_role" "nomad-workload" {
   name = "nomad-workload"
   policies = [
-    consul_acl_policy.nomad-workload.name,
-    consul_acl_policy.global-session.name,
-    consul_acl_policy.all-agent-read.name,
+    consul_acl_policy.nomad-workload.id,
+    consul_acl_policy.global-session.id,
+    consul_acl_policy.all-agent-read.id,
   ]
 }
 

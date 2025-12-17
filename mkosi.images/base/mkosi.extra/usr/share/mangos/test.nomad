@@ -34,7 +34,9 @@ job "test" {
         #!/bin/bash
 
         set -e
+        cat /etc/resolv.conf || true
         
+        export CONSUL_HTTP_ADDR=http://127.0.0.1:8500
         consul acl token read -self -format json > consul.json
 
         jq -e '[(.Roles | length)==1, .Roles[0].Name=="nomad-workload"] | all' < consul.json

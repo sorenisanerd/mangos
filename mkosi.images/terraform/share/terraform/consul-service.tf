@@ -40,30 +40,30 @@ resource "consul_acl_binding_rule" "consul-job" {
   auth_method = consul_acl_auth_method.nomad-workload.name
   bind_type   = "policy"
   bind_name   = consul_acl_policy.consul-api.name
-#    selector    = "value.nomad_namespace==\"admin\" and value.nomad_task==\"main\""
   selector    = "value.nomad_namespace==\"admin\" and value.nomad_job_id==\"consul\""
 }
 
 resource "consul_acl_policy" "consul-api" {
-  name   = "consul-api"
+  name  = "consul-api"
   rules = <<-EOP
     node_prefix "consul-api-" {
       policy = "write"
     }
     EOP
 }
-resource "consul_config_entry_service_intentions" "test-consul" {
+resource "consul_config_entry_service_intentions" "consul" {
   name = "consul"
 
   sources {
-    name   = "admin--test"
-    type   = "consul"
-    action = "allow"
+    name       = "admin--test"
+    type       = "consul"
+    action     = "allow"
+    precedence = 9
   }
 }
 
 resource "nomad_job" "consul" {
-  jobspec  = file("${path.module}/consul.nomad")
+  jobspec = file("${path.module}/consul.nomad")
   depends_on = [
     nomad_namespace.admin,
     vault_consul_secret_backend_role.consul-api,

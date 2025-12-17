@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [ "${MKOSI_DEBUG:-}" = "1" ]
+then
+    set -x
+fi
+
+keyring="$(mktemp)"
+GNUPGHOME=$(pwd)/.gnupg gpg --export | gpg --no-default-keyring --keyring "${keyring}" --import
+cp "${keyring}" ${BUILDROOT}/usr/lib/systemd/import-pubring.pgp

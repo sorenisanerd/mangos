@@ -1,6 +1,6 @@
 [Source]
 Type=url-file
-Path=http://localhost:1002/
+Path=http://mangos.soren.tools/sysupdate/mangos
 MatchPattern=docker_@v.raw \
              docker_@v.raw.gz \
              docker_@v.raw.zst \
