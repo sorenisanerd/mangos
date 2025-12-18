@@ -12,9 +12,10 @@ systemctl is-active systemd-cryptsetup@var.service
 systemctl is-active systemd-cryptsetup@var\\x2dtmp.service
 mangosctl bootstrap
 mangosctl sudo enroll -g{vault-server,{nomad,consul}-{server,client}}s 127.0.0.1
-journalctl -f &
 mangosctl sudo -- nomad job run -detach /usr/share/mangos/test.nomad
 sleep 5
+echo Current log:
+mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test
 tries=10
 while ! mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test | grep SUCCESS
 do
