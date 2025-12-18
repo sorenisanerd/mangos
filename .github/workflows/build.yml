@@ -94,7 +94,7 @@ jobs:
         env:
           MANGOS_GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          mkosi -E RUNNER_ENVIRONMENT --debug
+          mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile=verity-full,docker-ext,hashistack
       - name: List built artifacts
         run: find out/
       - name: Export image version for later steps
