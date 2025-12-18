@@ -95,10 +95,13 @@ jobs:
           MANGOS_GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile=verity-full,docker-ext,hashistack
+          rm *.zip mkosi.images/*/bin/*
       - name: List built artifacts
         run: find out/
       - name: Export image version for later steps
         run: echo IMAGE_VERSION="$(./mkosi.version)" >> $GITHUB_ENV
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
       - name: Test it
         run: |
           #!/bin/bash
