@@ -246,10 +246,12 @@ step 'Launch installed OS'
 run --blockdev=persistent:"${target_disk}"
 report_outcome
 
+echo sleeping for 300s
+sleep 300
+false
+
 cat <<'EOF' > "${tmpdir}/is_ready.sh"
 #!/bin/sh
-sleep 300
-exit 0
 if timeout 600 grep -q '^READY=1$'
 then
     kill -2 ${SOCAT_PPID}
