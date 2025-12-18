@@ -18,7 +18,7 @@ sysupdate_publish_dir=${SYSUPDATE_DISTDIR:-/var/lib/dist/sysupdate}
 
 resources/add-sysupdate-artifact mangos ${IMAGE_VERSION} out/mangos_${IMAGE_VERSION}.root-x86-64{,-verity,-verity-sig}.*.raw out/docker_${IMAGE_VERSION}.raw out/mangos_${IMAGE_VERSION}.efi
 
-for ext in out/{consul{,-template},nomad,consul,terraform,vault}_*.raw
+for ext in out/{consul{,-template},nomad,terraform,vault}_*.raw
 do
 	basename="$(basename "${ext}" .raw)"
 	component="${basename%_*}"
