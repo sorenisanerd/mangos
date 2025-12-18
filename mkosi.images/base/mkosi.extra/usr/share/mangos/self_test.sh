@@ -14,6 +14,9 @@ mangosctl bootstrap
 mangosctl sudo enroll -g{vault-server,{nomad,consul}-{server,client}}s 127.0.0.1
 mangosctl sudo -- nomad job run -detach /usr/share/mangos/test.nomad
 sleep 5
+docker ps || true
+ls -l /run/docker.sock || true
+ps aux | grep nomad || true
 echo Current log:
 mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test
 tries=10
