@@ -18,6 +18,7 @@ docker ps || true
 ls -l /run/docker.sock || true
 ps aux | grep nomad || true
 echo Current log:
+sleep 15
 mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test
 tries=10
 while ! mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test | grep SUCCESS
