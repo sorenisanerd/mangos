@@ -247,9 +247,11 @@ report_outcome
 
 cat <<'EOF' > "${tmpdir}/is_ready.sh"
 #!/bin/sh
-if grep -q '^READY=1$'
+if timeout 600 grep -q '^READY=1$'
 then
     kill -2 ${SOCAT_PPID}
+else
+    exit 1
 fi
 exit 0
 EOF
