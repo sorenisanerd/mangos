@@ -27,7 +27,7 @@ download() {
 
     local url="https://releases.hashicorp.com/${name}/${version}/${name}_${version}_linux_amd64.zip"
     local fname="${url##*/}"
-    wget -O "${fname}" "${url}"
+    wget --progress=dot:giga -O "${fname}" "${url}"
 
     sha256sums=https://releases.hashicorp.com/${name}/${version}/${name}_${version}_SHA256SUMS
     sha256sums_sig=https://releases.hashicorp.com/${name}/${version}/${name}_${version}_SHA256SUMS.sig
