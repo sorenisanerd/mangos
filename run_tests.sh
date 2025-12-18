@@ -262,6 +262,7 @@ step 'Waiting for installed OS to be ready'
 $systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --wait -- mkosi --debug sandbox -- socat VSOCK-LISTEN:23433,fork,socktype=5 EXEC:"${tmpdir}/is_ready.sh"
 report_outcome
 
+journalctl --user -f &
 step ssh into VM
 if $systemd_run -d --wait -q -p StandardOutput=journal -- ssh -i ./mkosi.key \
     -o UserKnownHostsFile=/dev/null \
