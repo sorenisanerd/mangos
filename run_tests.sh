@@ -263,6 +263,8 @@ $systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --w
 report_outcome
 
 journalctl --user -f &
+(while true; do echo from runner: ; df -h ; sleep 10; done) &
+
 step ssh into VM
 if $systemd_run -d --wait -q -p StandardOutput=journal -- ssh -i ./mkosi.key \
     -o UserKnownHostsFile=/dev/null \

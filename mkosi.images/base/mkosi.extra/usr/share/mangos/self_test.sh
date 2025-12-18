@@ -5,6 +5,8 @@ export BASE_URL
 set -e
 set -x
 
+(while true; do echo from vm: ; df -h ; sleep 13; done) &
+
 trap 'journalctl -n 1000 --no-pager' ERR
 systemctl is-active systemd-veritysetup@root.service
 systemctl is-active systemd-cryptsetup@swap.service
@@ -17,15 +19,17 @@ sleep 5
 docker ps || true
 ls -l /run/docker.sock || true
 ps aux | grep nomad || true
-echo Current log:
 sleep 15
+df -h || true
+grep '' /var/lib/nomad/data/alloc/*/alloc/logs/* || true
+echo Current log:
 mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test
 tries=10
 while ! mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test | grep SUCCESS
 do
         date
-        echo Current log:
-        mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test
+        echo Current logs:
+        grep '' /var/lib/nomad/data/alloc/*/alloc/logs/* || true
         if [ $tries -le 0 ]
         then
                 echo "Test job did not complete successfully"
