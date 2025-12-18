@@ -132,7 +132,7 @@ target_disk="${tmpdir}/target_disk.raw"
 # /var: 4G minimum
 # Total: ~17.6GB
 step Creating target disk
-$systemd_run -q -d --wait -- mkosi sandbox -- qemu-img create "${target_disk}" 20G
+$systemd_run -q -d --wait -- mkosi sandbox -- qemu-img create "${target_disk}" 30G
 report_outcome
 
 run() {
@@ -226,6 +226,7 @@ run --blockdev=installer:"${installer}" \
     --blockdev=persistent:"${target_disk}" --wait
 report_outcome
 
+# Submitted upstream: https://gitlab.com/kraxel/virt-firmware/-/merge_requests/30
 mkosi box -- patch -N mkosi.tools/usr/lib/python3/dist-packages/virt/firmware/vars.py virt-firmware.patch || true
 
 mkosi box -- virt-fw-vars --inplace "${tmpdir}/efivars.fd" --append-boot-filepath "EFI/Linux/mangos_${IMAGE_VERSION}.efi @1 "
@@ -246,22 +247,15 @@ step 'Launch installed OS'
 run --blockdev=persistent:"${target_disk}"
 report_outcome
 
-echo sleeping for 300s
-sleep 300
-false
-
 cat <<'EOF' > "${tmpdir}/is_ready.sh"
 #!/bin/sh
-if timeout 600 grep -q '^READY=1$'
+if grep -q '^READY=1$'
 then
     kill -2 ${SOCAT_PPID}
-else
-    exit 1
 fi
 exit 0
 EOF
 chmod +x "${tmpdir}/is_ready.sh"
-
 
 # Exit status 130 means killed by signal 2 (SIGINT)
 step 'Waiting for installed OS to be ready'
