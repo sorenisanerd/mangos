@@ -1,14 +1,14 @@
 [Source]
 Type=url-file
-Path=http://localhost:1002/
+Path=http://mangos.soren.tools/sysupdate/consul
 MatchPattern=consul_@v.raw \
              consul_@v.raw.gz \
-             consul_@v.raw.zstd \
+             consul_@v.raw.zst \
              consul_@v.raw.xz \
 
 [Target]
 Type=regular-file
-Path=/var/lib/extensions
+Path=/var/lib/extensions/consul.raw.v/
 InstancesMax=2
 MatchPattern=consul_@v.raw
 Mode=0444

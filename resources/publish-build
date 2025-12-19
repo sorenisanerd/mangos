@@ -1,0 +1,32 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "${IMAGE_VERSION}" ]
+then
+    echo "IMAGE_VERSION not set. Determining from mkosi.version."
+    if [ -x "mkosi.version" ]
+    then
+        IMAGE_VERSION="$(./mkosi.version)"
+    else
+        IMAGE_VERSION="$(cat mkosi.version)"
+    fi
+    echo "Determined IMAGE_VERSION=${IMAGE_VERSION}"
+fi
+
+sysupdate_publish_dir=${SYSUPDATE_DISTDIR:-/var/lib/dist/sysupdate}
+
+resources/add-sysupdate-artifact mangos ${IMAGE_VERSION} out/mangos_${IMAGE_VERSION}.root-x86-64{,-verity,-verity-sig}.*.raw out/docker_${IMAGE_VERSION}.raw out/mangos_${IMAGE_VERSION}.efi
+
+for ext in out/{consul{,-template},nomad,terraform,vault}_*.raw
+do
+	basename="$(basename "${ext}" .raw)"
+	component="${basename%_*}"
+	version="${basename#*_}"
+	resources/add-sysupdate-artifact ${component} ${version} ${ext}
+done
+
+for f in ${sysupdate_publish_dir}/*/SHA256SUMS
+do
+	GNUPGHOME=$(pwd)/.gnupg mkosi box -- gpg --yes --armor --detach-sign "${f}"
+done

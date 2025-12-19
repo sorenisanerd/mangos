@@ -3,6 +3,7 @@ template {
     destination = "/var/lib/nomad/ssl/nomad.crt"
     perms       = "0644"
     command     = <<-EOF
+        set -xe ;
         if test -s /var/lib/nomad/ssl/nomad.key.new; then mv /var/lib/nomad/ssl/nomad.key.new /var/lib/nomad/ssl/nomad.key ; fi ;
         if test -s /var/lib/nomad/ssl/ca.pem.new; then mv /var/lib/nomad/ssl/ca.pem.new /var/lib/nomad/ssl/ca.pem ; fi ;
         if systemctl is-active -q nomad; then systemctl reload nomad; fi

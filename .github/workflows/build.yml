@@ -5,11 +5,6 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        profiles:
-          - verity-full,docker-ext
-          - verity-full,docker
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -78,26 +73,41 @@ jobs:
           cat <<EOF > mkosi.key
           $MANGOS_KEY
           EOF
+      - name: Inject GnuPG key
+        env:
+          MANGOS_GNUPG_KEY: ${{ secrets.MANGOS_GNUPG_KEY }}
+        run: |
+          set -e
+          if [ -z "${MANGOS_GNUPG_KEY}" ]; then
+              echo '::warning title=Missing key::`MANGOS_GNUPG_KEY` was not set. Generating temporary key.'
+              echo '`MANGOS_GNUPG_KEY` was not set. Build performed with ephemeral key.' >> ${GITHUB_STEP_SUMMARY}
+              GNUPGHOME=$(pwd)/.gnupg gpg --batch --passphrase '' --quick-generate-key "ephemeral github.com/${GITHUB_REPOSITORY} signing Key"
+              exit 0
+          fi
+          GNUPGHOME=$(pwd)/.gnupg gpg --batch --import <<EOF
+          $MANGOS_GNUPG_KEY
+          EOF
       - name: Download Hashistack
         run: |
           ./hashiext-download.sh
       - name: Run mkosi
         env:
-          profiles: ${{ matrix.profiles }}
           MANGOS_GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile="${profiles},hashistack"
-          mkosi -E RUNNER_ENVIRONMENT --debug --profile= --profile="${profiles},installer"
+          mkosi -E RUNNER_ENVIRONMENT --debug
+          rm *.zip mkosi.images/*/bin/*
       - name: List built artifacts
-        run: find out/
+        run: ls out/
       - name: Export image version for later steps
         run: echo IMAGE_VERSION="$(./mkosi.version)" >> $GITHUB_ENV
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
       - name: Test it
         run: |
           #!/bin/bash
           set -x
           set -e
-
+          sudo apt-get update -y
           # mkosi doesn't pick this up from the tools dir for some reason
           sudo apt-get install -y ovmf
           ./run_tests.sh
@@ -110,7 +120,7 @@ jobs:
           shopt -s nullglob
           for file in out/mangos{,-installer}_${IMAGE_VERSION}.{raw,efi} out/docker*_${IMAGE_VERSION}.raw
           do
-              zstd --rm "$file"
+              test -f "${file}" && zstd --rm "$file"
           done
 #      - name: Sign artifacts
 #        run: for file in out/mangos* ; do cosign sign-blob -d -y --bundle "${file}.sigbundle" "${file}" > /dev/null; done
@@ -136,31 +146,27 @@ jobs:
             out/mangos-installer_${{ env.IMAGE_VERSION }}.github.json
             out/mangos-installer_${{ env.IMAGE_VERSION }}.spdx.json
             out/mangos-installer_${{ env.IMAGE_VERSION }}.syft.json
-          name: mangos.${{ matrix.profiles }}
-
-  release:
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    needs:
-      - build
-    permissions:
-      contents: write
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-      - name: Rename artifacts
-        run: |
-          mkdir release
-
-          mv artifacts/mangos.verity-full,docker-ext/* release/
-          for f in artifacts/mangos.verity-full,docker/* ; do
-            [ "$(basename $f)" == "mangosctl" ] && continue
-            mv "$f" "release/mangos+docker_$(basename $f | cut -f2- -d_)"
-          done
       - name: Release
+        if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: release/*
+          files: |
+            out/mangos_${{ env.IMAGE_VERSION }}.efi.zst
+            out/mangos_${{ env.IMAGE_VERSION }}.root-x86-64.*.zst
+            out/mangos_${{ env.IMAGE_VERSION }}.root-x86-64-verity.*.zst
+            out/mangos_${{ env.IMAGE_VERSION }}.root-x86-64-verity-sig.*.zst
+            out/mangos_${{ env.IMAGE_VERSION }}.raw.zst
+            out/mangos_${{ env.IMAGE_VERSION }}.cyclonedx.json
+            out/mangos_${{ env.IMAGE_VERSION }}.github.json
+            out/mangos_${{ env.IMAGE_VERSION }}.spdx.json
+            out/mangos_${{ env.IMAGE_VERSION }}.syft.json
+            out/mangos_${{ env.IMAGE_VERSION }}.manifest
+            out/mangosctl
+            out/docker*_${{ env.IMAGE_VERSION }}.raw.zst
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.raw.zst
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.cyclonedx.json
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.github.json
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.spdx.json
+            out/mangos-installer_${{ env.IMAGE_VERSION }}.syft.json
+ 

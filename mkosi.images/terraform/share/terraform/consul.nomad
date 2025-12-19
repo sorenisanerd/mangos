@@ -3,6 +3,7 @@ job "consul" {
 
   group "client" {
     service {
+      tags = ["api"]
       name = "consul"
       port = "http"
       connect {
@@ -14,6 +15,10 @@ job "consul" {
       mode = "bridge"
       port "http" {
         static = 8500
+      }
+      port "dns" {
+        static       = 8600
+        host_network = "default"
       }
     }
 
@@ -29,15 +34,23 @@ job "consul" {
       template {
         data = <<-EOF
         encrypt   = "{{ with secret "secrets/mangos/consul/gossip" }}{{ .Data.encryption_key | trimSpace }}{{ end }}"
-        node_name = "consul-api-{{ env "HOSTNAME" }}"
+        node_name = "consul-api-{{ env "NOMAD_SHORT_ALLOC_ID" }}"
+        addresses {
+          dns = "0.0.0.0"
+        }
         acl {
           enabled = true
           tokens {
-            agent = "{{ env "CONSUL_HTTP_TOKEN"}}"
+            default = "{{ env "CONSUL_HTTP_TOKEN" }}"
+            agent   = "{{ env "CONSUL_HTTP_TOKEN" }}"
           }
+        }
+        ui_config {
+          enabled = true
         }
         EOF
         destination = "${NOMAD_SECRETS_DIR}/consul.hcl"
+        change_mode = "restart"
       }
       driver = "docker"
       config {

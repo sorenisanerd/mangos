@@ -1,0 +1,11 @@
+--- mkosi.tools/usr/lib/python3/dist-packages/virt/firmware/vars.py     2025-12-16 04:41:01.224135242 +0000
++++ mkosi.tools/usr/lib/python3/dist-packages/virt/firmware/vars.py     2025-12-16 04:41:16.620979226 +0000
+@@ -215,7 +215,7 @@
+ 
+     if options.append_boot_filepath:
+         for item in options.append_boot_filepath:
+-            strings = item.replace('/', '\\').split(' ')
++            strings = item.replace('/', '\\').split(' ', 1)
+             filepath = strings[0]
+             if len(strings) > 1:
+                 optdata = bytes(ucs16.from_string(strings[1]))

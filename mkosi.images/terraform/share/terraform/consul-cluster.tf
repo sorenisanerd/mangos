@@ -113,6 +113,16 @@ resource "vault_policy" "consul-gossip" {
     EOP
 }
 
+resource "vault_policy" "consul-management" {
+  name   = "consul-management"
+  policy = <<-EOP
+    path "${vault_consul_secret_backend_role.management.backend}/creds/${vault_consul_secret_backend_role.management.name}" {
+      capabilities = ["read"]
+    }
+    EOP
+}
+
+
 resource "terraform_data" "consul-bootstrap" {
   depends_on = [
     vault_consul_secret_backend.consul,

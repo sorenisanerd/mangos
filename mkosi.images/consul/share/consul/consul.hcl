@@ -5,7 +5,6 @@ tls {
   }
 }
 
-server   = true
 data_dir = "/var/lib/consul/data"
 
 # The real encryption key is provided during
@@ -23,6 +22,8 @@ acl {
 
 bind_addr      = "0.0.0.0"
 advertise_addr = "{{ GetPrivateInterfaces | exclude \"name\" \"docker\" | attr \"address\" }}"
+
+rejoin_after_leave = true
 
 ports {
   https     = 8501

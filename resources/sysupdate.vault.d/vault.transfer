@@ -1,14 +1,14 @@
 [Source]
 Type=url-file
-Path=http://localhost:1002/
+Path=http://mangos.soren.tools/sysupdate/vault
 MatchPattern=vault_@v.raw \
              vault_@v.raw.gz \
-             vault_@v.raw.zstd \
+             vault_@v.raw.zst \
              vault_@v.raw.xz \
 
 [Target]
 Type=regular-file
-Path=/var/lib/extensions
+Path=/var/lib/extensions/vault.raw.v/
 InstancesMax=2
 MatchPattern=vault_@v.raw
 Mode=0444

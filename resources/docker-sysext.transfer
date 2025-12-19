@@ -1,14 +1,14 @@
 [Source]
 Type=url-file
-Path=http://localhost:1002/
+Path=http://mangos.soren.tools/sysupdate/mangos
 MatchPattern=docker_@v.raw \
              docker_@v.raw.gz \
-             docker_@v.raw.zstd \
-             docker_@v.raw.xz \
+             docker_@v.raw.zst \
+             docker_@v.raw.xz
 
 [Target]
 Type=regular-file
-Path=/var/lib/extensions
+Path=/var/lib/extensions/docker.raw.v/
 InstancesMax=2
 MatchPattern=docker_@v.raw
 Mode=0444

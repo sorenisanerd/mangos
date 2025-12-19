@@ -90,8 +90,12 @@ systemd_run="systemd-run --user --slice ${slice}"
 
 trap "echo exit code: $?; systemctl --user stop mangos-test-${testid}.slice; journalctl --no-pager --user -u ${slice}" EXIT
 
+step 'Publish build to sysupdate dir'
+SYSUPDATE_DISTDIR=$(pwd)/dist/sysupdate resources/publish-build 
+report_outcome
+
 step 'Launch web server (mkosi serve)'
-$systemd_run -u "mangos-test-${testid}-serve" -q -d -- mkosi serve
+$systemd_run -u "mangos-test-${testid}-serve" -q --working-directory $(pwd)/dist -- python3 -m http.server 8081
 report_outcome
 
 tmpdir="$(mktemp -d)"
@@ -127,7 +131,7 @@ target_disk="${tmpdir}/target_disk.raw"
 # /var: 4G minimum
 # Total: ~17.6GB
 step Creating target disk
-$systemd_run -q -d --wait -- mkosi sandbox -- qemu-img create "${target_disk}" 20G
+$systemd_run -q -d --wait -- mkosi sandbox -- qemu-img create "${target_disk}" 30G
 report_outcome
 
 run() {
@@ -221,9 +225,18 @@ run --blockdev=installer:"${installer}" \
     --blockdev=persistent:"${target_disk}" --wait
 report_outcome
 
+# Submitted upstream: https://gitlab.com/kraxel/virt-firmware/-/merge_requests/30
+mkosi box -- patch -N mkosi.tools/usr/lib/python3/dist-packages/virt/firmware/vars.py virt-firmware.patch || true
+
+mkosi box -- virt-fw-vars --inplace "${tmpdir}/efivars.fd" --append-boot-filepath "EFI/Linux/mangos_${IMAGE_VERSION}.efi @1 "
+
+varsjson="$(mktemp)"
+
+mkosi box -- virt-fw-vars -i "${tmpdir}/efivars.fd" --output-json - 2> /dev/null | jq '{variables:[.variables as $vars | $vars[] | select(.name=="BootOrder") as $BootOrder | $BootOrder + {data:($vars[] | select(.data | test("'$(echo -n mangos | iconv -f ascii -t UCS2 | xxd -p)'")) | .name | capture("(?<num>..)$") | (.num + "00" + $BootOrder.data))}]}' > "${varsjson}"
+mkosi box -- virt-fw-vars --inplace "${tmpdir}/efivars.fd" --set-json "${varsjson}"
+
 step 'Run VM (install mangos)'
 run -smbios type=11,value=io.systemd.credential:mangos_install_target=/dev/vdb \
-    -smbios type=11,value=io.systemd.credential:mangos_install_source=http://10.0.2.2:8081/mangos_${IMAGE_VERSION}.raw \
     --blockdev=installer:"${installer}" \
     --blockdev=persistent:"${target_disk}" --wait
 report_outcome
@@ -243,7 +256,6 @@ exit 0
 EOF
 chmod +x "${tmpdir}/is_ready.sh"
 
-
 # Exit status 130 means killed by signal 2 (SIGINT)
 step 'Waiting for installed OS to be ready'
 $systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --wait -- mkosi --debug sandbox -- socat VSOCK-LISTEN:23433,fork,socktype=5 EXEC:"${tmpdir}/is_ready.sh"
@@ -255,7 +267,7 @@ if $systemd_run -d --wait -q -p StandardOutput=journal -- ssh -i ./mkosi.key \
     -o StrictHostKeyChecking=no \
     -o LogLevel=ERROR \
     -o ProxyCommand="mkosi sandbox -- socat - VSOCK-CONNECT:42:%p" \
-    root@mkosi /usr/share/mangos/self_test.sh
+    root@mkosi 'mangosctl --base-url=http://10.0.2.2:8081 updatectl add-overrides ; /usr/share/mangos/self_test.sh'
 then
     success
     $systemd_run -u "mangos-test-${testid}-result" -q -- echo "Mangos test ${testid} succeeded"
