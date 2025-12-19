@@ -34,10 +34,10 @@ job "consul" {
       template {
         data = <<-EOF
         encrypt   = "{{ with secret "secrets/mangos/consul/gossip" }}{{ .Data.encryption_key | trimSpace }}{{ end }}"
+        node_name = "consul-api-{{ env "NOMAD_SHORT_ALLOC_ID" }}"
         addresses {
           dns = "0.0.0.0"
         }
-        node_name = "consul-api-{{ env "NOMAD_SHORT_ALLOC_ID" }}"
         acl {
           enabled = true
           tokens {

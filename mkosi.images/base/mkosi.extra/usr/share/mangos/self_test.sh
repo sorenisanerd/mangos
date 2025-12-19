@@ -12,22 +12,10 @@ systemctl is-active systemd-cryptsetup@var.service
 systemctl is-active systemd-cryptsetup@var\\x2dtmp.service
 mangosctl bootstrap
 mangosctl sudo enroll -g{vault-server,{nomad,consul}-{server,client}}s 127.0.0.1
-mangosctl sudo -- nomad job run -detach /usr/share/mangos/test.nomad
-sleep 5
-docker ps || true
-ls -l /run/docker.sock || true
-ps aux | grep nomad || true
-sleep 15
-df -h || true
-grep '' /var/lib/nomad/data/alloc/*/alloc/logs/* || true
-echo Current log:
-mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test
+mangosctl sudo -- nomad job run /usr/share/mangos/test.nomad
 tries=10
 while ! mangosctl sudo -- nomad alloc logs -namespace=admin -task server -job test | grep SUCCESS
 do
-        date
-        echo Current logs:
-        grep '' /var/lib/nomad/data/alloc/*/alloc/logs/* || true
         if [ $tries -le 0 ]
         then
                 echo "Test job did not complete successfully"

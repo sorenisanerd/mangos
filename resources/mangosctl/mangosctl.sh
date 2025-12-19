@@ -986,7 +986,7 @@ do_bootstrap() {
 	nomad_mgmt_token="$(VAULT_TOKEN=$(systemd-creds decrypt /var/lib/private/vault.root_token) vault read -field=secret_id nomad/creds/management)"
 	NOMAD_TOKEN="${nomad_mgmt_token}" \
 	CONSUL_HTTP_TOKEN=${consul_mgmt_token} \
-	VERBOSE=1 do_step "Final Terraform run" run_terraform_apply
+	do_step "Final Terraform run" run_terraform_apply
 }
 
 set_agent_token() {
