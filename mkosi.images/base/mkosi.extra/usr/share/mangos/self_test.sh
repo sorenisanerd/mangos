@@ -5,8 +5,6 @@ export BASE_URL
 set -e
 set -x
 
-(while true; do echo from vm: ; df -h ; sleep 13; done) &
-
 trap 'journalctl -n 1000 --no-pager' ERR
 systemctl is-active systemd-veritysetup@root.service
 systemctl is-active systemd-cryptsetup@swap.service
