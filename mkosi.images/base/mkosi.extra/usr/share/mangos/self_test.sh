@@ -27,6 +27,8 @@ do
 done
 
 echo "===> Validating Recovery Keys"
+echo "PATH is: $PATH"
+which cryptsetup || true
 machine_id=$(cat /etc/machine-id)
 
 # Auto-detect LUKS partitions
@@ -58,3 +60,15 @@ else
 
     echo "Recovery key validation: PASSED"
 fi
+
+step 'Testing LUKS recovery functionality'
+
+if bash /usr/share/mangos/recovery_test.sh
+then
+    echo "✓ LUKS recovery test succeeded"
+else
+    echo "ERROR: LUKS recovery test failed"
+    exit 1
+fi
+echo ""
+echo "All self-tests completed successfully"
