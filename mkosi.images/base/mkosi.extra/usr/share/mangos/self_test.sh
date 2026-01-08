@@ -58,3 +58,14 @@ else
 
     echo "Recovery key validation: PASSED"
 fi
+
+echo 'Testing LUKS recovery functionality'
+
+if /usr/share/mangos/recovery_test.sh; then
+    echo "LUKS recovery test: PASSED"
+else
+    echo "LUKS recovery test: FAILED"
+    exit 1
+fi
+
+echo "All self-tests completed successfully."

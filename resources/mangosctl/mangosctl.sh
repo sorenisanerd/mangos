@@ -326,19 +326,28 @@ enroll_recovery_keys() {
 	local machine_id="$(cat /etc/machine-id)"
 	local found_any=0
 
-	# Find all LUKS-encrypted partitions
-	local devices=($(lsblk -ln -o NAME,TYPE,FSTYPE | awk '$2=="part" && $3=="crypto_LUKS" {print "/dev/"$1}'))
+	local marker_dir="/var/lib/mangos/luks-recovery-keys-enrolled"
+	mkdir -p "${marker_dir}"
 
-	for device in "${devices[@]}"; do
-		local partlabel=$(lsblk -n -o PARTLABEL "$device" 2>/dev/null | tr -d ' \n\r\t')
+	# Find all LUKS-encrypted partitions
+	local devices="$(lsblk -ln -o NAME,TYPE,FSTYPE | awk '$2=="part" && $3=="crypto_LUKS" {print "/dev/"$1}' | tr '\n' ' ')"
+
+	echo "> LUKS-encrypted devices found: $devices"
+
+	for device in ${devices}; do
+		echo "> Processing device: ${device}"
+		local partlabel="$(lsblk -n -o PARTLABEL "${device}" 2>/dev/null | tr -d ' \n\r\t')"
 
 		# Skip if no valid partition label
-		if [ -z "$partlabel" ]; then
+		if [ -z "${partlabel}" ]; then
+			echo "> Device ${device} has no PARTLABEL, skipping"
 			continue
 		fi
 
-		# Skip if recovery key already exists in Vault
-		if VAULT_TOKEN="${vault_token}" vault kv get "secrets/mangos/recovery-keys/${machine_id}/${partlabel}" >/dev/null 2>&1; then
+		# Skip if already enrolled
+		local marker_file="${marker_dir}/${partlabel}"
+		if [ -f "${marker_file}" ]; then
+			echo "> Recovery key for ${partlabel} already enrolled, skipping"
 			continue
 		fi
 
@@ -352,28 +361,52 @@ enroll_recovery_keys() {
 		# Extract recovery key - format: 6 lowercase alphanumeric groups of 8, separated by dashes
 		# Example: etklvner-lblhnbgl-kdtnujtk-ikjlgbur-lnlrjrrc-iuikkidg-feientnn-dkjeeuft
 		LUKS_RECOVERY_KEY_REGEX='[a-z0-9]{8}(-[a-z0-9]{8}){7}'
-		local recovery_key=$(echo "$output" | grep -oE "${LUKS_RECOVERY_KEY_REGEX}" | head -n 1)
+		local recovery_key="$(echo "$output" | grep -oE "${LUKS_RECOVERY_KEY_REGEX}" | head -n 1)"
 
-		if [ -n "$recovery_key" ] && [[ "$recovery_key" =~ ^${LUKS_RECOVERY_KEY_REGEX}$ ]]; then
-			VAULT_TOKEN="${vault_token}" vault kv put "secrets/mangos/recovery-keys/${machine_id}/${partlabel}" \
+		if [ -n "${recovery_key}" ]; then
+			if VAULT_TOKEN="${vault_token}" vault kv put "secrets/mangos/recovery-keys/${machine_id}/${partlabel}" \
 				key="${recovery_key}" hostname="${HOSTNAME}" device="${device}" created="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-			if [ $? -eq 0 ]; then
+			then
 				greenln Success
+				touch "${marker_file}"
 			else
 				red "Failed to store in Vault"
-				echo
 			fi
 		else
-			red "Failed to enroll or extract recovery key"
-			echo
+			red "Failed to extract recovery key. cryptenroll output:"
+			echo "${output}"
 		fi
 	done
 
-	if [ $found_any -eq 0 ]; then
-		echo " > All recovery keys already enrolled"
+	if [ ${found_any} -eq 0 ]; then
+		echo "> All recovery keys already enrolled"
 	else
-		echo " > Recovery keys enrolled and stored in Vault"
+		echo "> Recovery keys enrolled and stored in Vault"
 	fi
+}
+
+write_machine_id_metadata() {
+	step "Getting mount accessor for node-cert"
+	node_auth_accessor="$(vault read -field=accessor sys/auth/node-cert)"
+
+	step "Looking up entity name for this node"
+	entity_name="$(vault write -field=name identity/lookup/entity alias_name=${HOSTNAME}.mangos alias_mount_accessor=${node_auth_accessor})"
+
+	step "Setting machine-id as entity metadata"
+	machine_id="$(cat /etc/machine-id)"
+
+	# Read current metadata, merge with new machine_id, and write back
+	current_metadata="$(vault read -format=json identity/entity/name/${entity_name} | jq -r '.data.metadata // {}')"
+	new_metadata="$(echo "${current_metadata}" | jq --arg mid "${machine_id}" '. + {machine_id: $mid}')"
+
+	# Convert JSON to key=value arguments for Vault CLI
+	metadata_args=()
+	while IFS='=' read -r k v; do
+		metadata_args+=("metadata=${k}=${v}")
+	done < <(echo "${new_metadata}" | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]')
+
+	vault write identity/entity/name/"${entity_name}" "${metadata_args[@]}"
+	greenln Success
 }
 
 do_enroll() {
@@ -481,18 +514,7 @@ do_enroll() {
 	NODE_VAULT_TOKEN=$(vault login -method=cert -path=node-cert -client-cert=/var/lib/mangos/mangos.crt -client-key=<(systemd-creds decrypt ${confext_dir}/etc/credstore.encrypted/mangos.key) -token-only)
 	greenln Success
 
-	step "Getting mount accessor for node-cert"
-	node_auth_accessor=$(vault read -field=accessor sys/auth/node-cert)
-	echo $node_auth_accessor
-
-	step "Looking up entity name for this node"
-	entity_name=$(vault write -field=name identity/lookup/entity alias_name=${HOSTNAME}.mangos alias_mount_accessor=${node_auth_accessor})
-	echo $entity_name
-
-	step "Setting machine-id as entity metadata"
-	machine_id=$(cat /etc/machine-id)
-	vault write identity/entity/name/${entity_name} metadata=machine_id="${machine_id}"
-	greenln Success
+	do_step "Writing machine ID metadata to Vault" write_machine_id_metadata
 
 	for group in ${!groups[@]}
 	do
