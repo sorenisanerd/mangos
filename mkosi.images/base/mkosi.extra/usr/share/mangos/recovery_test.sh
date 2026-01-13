@@ -8,8 +8,8 @@ machine_id="$(cat /etc/machine-id)"
 test_recovery_key() {
     test_device="$1"
 
-    test_partition="$(lsblk -nlo PARTLABEL ${test_device} | tr -d '\n')"
-    mapper_name="$(lsblk -nlo NAME ${test_device} | awk 'NR==2')"
+    test_partition="$(lsblk -nlo PARTLABEL "${test_device}" | tr -d '\n')"
+    mapper_name="$(lsblk -nlo NAME "${test_device}" | awk 'NR==2')"
 
     echo "Testing recovery unlock for ${test_partition} (device: ${test_device}, mapper: ${mapper_name})..."
     echo ""
@@ -18,14 +18,14 @@ test_recovery_key() {
     recovery_key="$(mangosctl sudo -- vault kv get -field=key "secrets/mangos/recovery-keys/${machine_id}/${test_partition}")"
 
     # Find TPM keyslot number
-    tpm_slot="$(cryptsetup luksDump ${test_device} | \
+    tpm_slot="$(cryptsetup luksDump "${test_device}" | \
         awk '/Tokens:/,/Keyslots:/ {if (/systemd-tpm2/) found=1; if (found && /^  [0-9]+:/) {print $1; exit}}' | \
         tr -d ':')"
 
     echo "Removing TPM keyslot ${tpm_slot} (simulating TPM failure)..."
     # Provide the recovery key on stdin so systemd-cryptenroll does not prompt interactively.
     # Use --unlock-key-file=/dev/stdin to read the key from stdin when wiping the TPM slot.
-    printf '%s' "$recovery_key" | systemd-cryptenroll --wipe-slot=tpm2 --unlock-key-file=/dev/stdin ${test_device}
+    printf '%s' "${recovery_key}" | systemd-cryptenroll --wipe-slot=tpm2 --unlock-key-file=/dev/stdin "${test_device}"
 
 
     if [ ! -b /dev/mapper/"${mapper_name}" ]; then
@@ -34,7 +34,7 @@ test_recovery_key() {
     fi
 
     # Get mount point for this partition
-    mount_point="$(findmnt -n -o TARGET /dev/mapper/${mapper_name} || true)"
+    mount_point="$(findmnt -n -o TARGET "/dev/mapper/${mapper_name}" || true)"
 
     # Unmount and close
     if [ -n "${mount_point}" ]; then
@@ -45,7 +45,7 @@ test_recovery_key() {
 
     # THE CRITICAL TEST: Unlock with recovery key
     echo "Unlocking with recovery key..."
-    echo -n "$recovery_key" | systemd-cryptsetup attach "${mapper_name}" "${test_device}" -
+    echo -n "${recovery_key}" | systemd-cryptsetup attach "${mapper_name}" "${test_device}" -
     # Remount
     if [ -n "${mount_point}" ]; then
         mount /dev/mapper/"${mapper_name}" "${mount_point}"
@@ -75,7 +75,7 @@ test_recovery_key() {
 # Auto-detect first LUKS partition for testing
 devices="$(lsblk -ln -o NAME,TYPE,FSTYPE | awk '$2=="part" && $3=="crypto_LUKS" {print "/dev/"$1}' | tr '\n' ' ')"
 
-echo "> LUKS-encrypted devices found: $devices"
+echo "> LUKS-encrypted devices found: ${devices}"
 
 for test_device in ${devices}; do
     echo "> Testing device: ${test_device}"

@@ -4,13 +4,13 @@ set -x
 set -e
 set -o pipefail
 
-debdir=$(mktemp -d)
+debdir="$(mktemp -d)"
 
 trap 'rm -rf "${debdir}"' EXIT
 
-cp -r ${BUILDROOT}/* ${debdir}/
+cp -r "${BUILDROOT:?}"/* "${debdir}/"
 
-rm -rf ${debdir}/{var,usr/lib/{extension-release,sysupdate.*}.d}
+rm -rf "${debdir:?}"/{var,usr/lib/{extension-release,sysupdate.*}.d}
 
 case "${ARCHITECTURE}" in
         x86-64)
@@ -29,5 +29,5 @@ Architecture: ${arch}
 Maintainer: Soren Hansen <soren.hansen@mastercard.com>
 Description: ${SUBIMAGE}
 EOF
-mkdir -p ${OUTPUTDIR}/pool
+mkdir -p "${OUTPUTDIR}/pool"
 dpkg-deb --root-owner-group --build "${debdir}" "${OUTPUTDIR}/${SUBIMAGE}_${IMAGE_VERSION}_${arch}.deb"

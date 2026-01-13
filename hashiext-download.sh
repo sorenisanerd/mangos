@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 VAULT_VERSION=${VAULT_VERSION:-latest}
 CONSUL_VERSION=${CONSUL_VERSION:-latest}
 NOMAD_VERSION=${NOMAD_VERSION:-latest}
@@ -15,7 +17,7 @@ download() {
     local version="$2"
 
     if [ "${version}" = "latest" ]; then
-        version=$(get_latest_version "$name")
+        version=$(get_latest_version "${name}")
     fi
 
     version="${version#v}"
@@ -23,7 +25,7 @@ download() {
 
     origdir="$(pwd)"
     tmpdir=$(mktemp -d)
-    cd "$tmpdir" || exit 1
+    cd "${tmpdir}" || exit 1
 
     local url="https://releases.hashicorp.com/${name}/${version}/${name}_${version}_linux_amd64.zip"
     local fname="${url##*/}"
@@ -35,9 +37,10 @@ download() {
     wget -O SHA256SUMS "${sha256sums}"
     wget -O SHA256SUMS.sig "${sha256sums_sig}"
 
-    export GNUPGHOME=$(mktemp -d)
-    trap 'rm -rf $GNUPG_HOME' EXIT
-    if ! gpg --verify --no-default-keyring --keyring ${origdir}/resources/hashicorp-signing-key.72D7468F.gpg SHA256SUMS.sig SHA256SUMS
+    GNUPGHOME="$(mktemp -d)"
+    export GNUPGHOME
+    trap 'rm -rf $GNUPGHOME' EXIT
+    if ! gpg --verify --no-default-keyring --keyring "${origdir}/resources/hashicorp-signing-key.72D7468F.gpg" SHA256SUMS.sig SHA256SUMS
     then
         echo "GPG signature verification failed!"
         exit 1
@@ -63,19 +66,19 @@ for tool in terraform vault nomad consul consul-template ; do
         echo "Binary mkosi.images/${tool}/bin/${tool} already exists, skipping download/unzip"
         continue
     fi
-    download "$tool" "${!v}"
+    download "${tool}" "${!v}"
     unzip ${tool}_*.zip -d mkosi.images/${tool}/bin ${tool}
 done
 
 cni_plugins=https://github.com/containernetworking/plugins/releases/download/v1.8.0/cni-plugins-linux-amd64-v1.8.0.tgz
 
-if ! [ -e "$(basename $cni_plugins)" ]
+if ! [ -e "$(basename "${cni_plugins}")" ]
 then
-    wget $cni_plugins
+    wget "${cni_plugins}"
 fi
 
 if ! [ -d resources/cni ]
 then
     mkdir -p resources/cni
-    tar xvzf $(basename $cni_plugins) -C resources/cni
+    tar xvzf "$(basename "${cni_plugins}")" -C resources/cni
 fi
