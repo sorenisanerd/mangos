@@ -27,12 +27,10 @@ usage() {
     echo "already set, but expects \$VAULT_TOKEN to be set. E.g.:"
     echo ""
     echo "    VAULT_TOKEN=token-with-e.g.-mangos-join-role $0 --datacenter az1 --region us-west1 10.20.30.40"
-    exit 1
 }
 
 main() {
-	args="$(getopt -o '+h' --long 'help,datacenter:,region:' -n 'mangos-join' -- "$@")"
-	if [ $? != 0 ]
+	if ! args="$(getopt -o '+h' --long 'help,datacenter:,region:' -n 'mangos-join' -- "$@")"
 	then
 		echo "Error parsing arguments" >&2
 		usage
@@ -128,7 +126,7 @@ EOF
     csr="/etc/credstore/mangos.csr"
     if ! [ -s "${csr}" ]
     then
-        step "Generating Certificate Signing Request (CSR) $csr"
+        step "Generating Certificate Signing Request (CSR) ${csr}"
         chronic openssl req -key <(systemd-creds decrypt "${keyfile}") -new -subj "/CN=${HOSTNAME}.mangos/" -out "${csr}"
         greenln Success
     fi
@@ -137,7 +135,7 @@ EOF
     step "Submitting CSR to Vault for signing"
     vault write -field=certificate pki-nodes/sign/node-cert \
         csr=@/etc/credstore/mangos.csr \
-        common_name=${HOSTNAME}.mangos \
+        common_name="${HOSTNAME}.mangos" \
         ttl=72h \
         format=pem > /var/lib/mangos/mangos.crt
     greenln Success
@@ -151,15 +149,15 @@ EOF
 
 	step "Getting mount accessor for node-cert"
 	node_auth_accessor=$(vault read -field=accessor sys/mounts/auth/node-cert)
-	echo $node_auth_accessor
+	echo "${node_auth_accessor}"
 
     entity_info=$(mktemp)
 	step "Looking up Vault entity for this node"
-	vault write -format=json identity/lookup/entity alias_name=${HOSTNAME}.mangos alias_mount_accessor=${node_auth_accessor} > ${entity_info}
-    entity_name=$(jq .data.name -r < ${entity_info})
-    entity_id=$(jq .data.id -r < ${entity_info})
-	greenln ${entity_name}
-    rm -f ${entity_info}
+	vault write -format=json identity/lookup/entity alias_name="${HOSTNAME}.mangos" alias_mount_accessor="${node_auth_accessor}" > "${entity_info}"
+    entity_name=$(jq .data.name -r < "${entity_info}")
+    entity_id=$(jq .data.id -r < "${entity_info}")
+	greenln "${entity_name}"
+    rm -f "${entity_info}"
 
     for group in consul-clients nomad-clients
     do
@@ -184,7 +182,7 @@ EOF
 	then
 		step "Generating Consul agent recovery token"
 		agent_recovery_token=$(systemd-id128 -u new)
-		systemd-creds -H encrypt - /etc/credstore.encrypted/consul.agent_recovery <<<${agent_recovery_token}
+		systemd-creds -H encrypt - /etc/credstore.encrypted/consul.agent_recovery <<<"${agent_recovery_token}"
 		greenln Success
 	fi
 
@@ -210,10 +208,10 @@ EOF
     then
         enckey=$(mktemp --suffix .json)
         step "Fetching Consul gossip encryption key from Vault"
-        VAULT_TOKEN=${NODE_VAULT_TOKEN} vault read -field=encryption_key secrets/mangos/consul/gossip | jq -R '{encrypt:.}' > ${enckey}
-        chown consul:consul $enckey
+        VAULT_TOKEN=${NODE_VAULT_TOKEN} vault read -field=encryption_key secrets/mangos/consul/gossip | jq -R '{encrypt:.}' > "${enckey}"
+        chown consul:consul "${enckey}"
         greenln Success
-        argv+=(-config-file=${enckey})
+        argv+=(-config-file="${enckey}")
     fi
 
 	if ! [ -e "/var/lib/consul/data/serf" ]
@@ -228,7 +226,7 @@ EOF
 			-p "Conflicts=consul.service" \
             -p "Before=consul.service" \
 			/usr/bin/consul agent \
-			-retry-join ${1} \
+			-retry-join "${1}" \
 			-config-dir=/usr/share/consul/ \
 			-datacenter "${REGION}-${DATACENTER}" \
 			"${argv[@]}"
@@ -236,7 +234,7 @@ EOF
 	fi
 
 	do_step "Starting Consul agent" chronic systemctl start consul
-    do_step "Joining Consul cluster" chronic consul join -token-file <(systemd-creds decrypt /etc/credstore.encrypted/consul.agent_recovery | jq -r .acl.tokens.agent_recovery) ${server}
+    do_step "Joining Consul cluster" chronic consul join -token-file <(systemd-creds decrypt /etc/credstore.encrypted/consul.agent_recovery | jq -r .acl.tokens.agent_recovery) "${server}"
 
 	step "Acquiring Consul management token"
 	consul_mgmt_token=$(vault read -field=token consul/creds/management)
@@ -248,7 +246,7 @@ EOF
 
 	if ! has_token agent
 	then
-		set_agent_token agent "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -node-identity $(hostname):${REGION}-${DATACENTER} -role-name=consul-agent -format=json |jq -r .SecretID)"
+		set_agent_token agent "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -node-identity "$(hostname):${REGION}-${DATACENTER}" -role-name=consul-agent -format=json |jq -r .SecretID)"
 	fi
 
 	if ! has_token default
@@ -285,16 +283,19 @@ chronic() {
 		"$@"
 		return $?
 	fi
-	local tmp=$(mktemp)
-	rv=0
-	"$@" > ${tmp} 2>&1 || rv=$?
+	local tmp
 
-	if [ $rv -ne 0 ]
+    tmp=$(mktemp)
+
+	rv=0
+	"$@" > "${tmp}" 2>&1 || rv=$?
+
+	if [ ${rv} -ne 0 ]
 	then
 		cat "${tmp}"
 	fi
-	rm -f ${tmp}
-	return $rv
+	rm -f "${tmp}"
+	return ${rv}
 }
 
 green() {
@@ -331,8 +332,7 @@ failure() {
 do_step() {
 	step "$1"
 	shift
-	"$@"
-	if [ $? -eq 0 ]
+	if "$@"
 	then
 		success
 	else
@@ -356,19 +356,19 @@ function download_hashistack_component() {
 
     latest_version=$(curl -s "https://api.github.com/repos/hashicorp/${component}/releases/latest" | jq .name -r)
 
-    if which "$component" >/dev/null 2>&1; then
-        installed_version=$($component version | head -n1 | awk '{print $2}')
-        if [ "$installed_version" = "$latest_version" ]; then
-            echo "$component is already at the latest version ($latest_version). Skipping download."
+    if which "${component}" >/dev/null 2>&1; then
+        installed_version="$("${component}" version | head -n1 | awk '{print $2}')"
+        if [ "${installed_version}" = "${latest_version}" ]; then
+            echo "${component} is already at the latest version (${latest_version}). Skipping download."
             return
         else
-            echo "$component is at version $installed_version. Latest version is $latest_version. Downloading latest version."
+            echo "${component} is at version ${installed_version}. Latest version is ${latest_version}. Downloading latest version."
         fi
     else
-        echo "$component is not installed. Downloading version $latest_version."
+        echo "${component} is not installed. Downloading version ${latest_version}."
     fi
     tmpdir=$(mktemp -d)
-    trap "rm -rf ${tmpdir}" EXIT
+    trap 'rm -rf ${tmpdir}' EXIT
     curl -SL "https://releases.hashicorp.com/${component}/${latest_version#v}/${component}_${latest_version#v}_linux_${ARCH}.zip" -o "${tmpdir}/${component}.zip"
     unzip -o "${tmpdir}/${component}.zip" -d "/usr/bin" "${component}"
     rm -rf "${tmpdir}"
@@ -450,8 +450,8 @@ function download_hashistack_sysext {
     local component=$1
 
     mkdir -p /var/lib/extensions/"${component}".raw.v
-    mkdir -p /usr/lib/sysupdate.${component}.d
-    cat <<EOF > /usr/lib/sysupdate.${component}.d/${component}.${transfer_extension}
+    mkdir -p "/usr/lib/sysupdate.${component}.d"
+    cat <<EOF > "/usr/lib/sysupdate.${component}.d/${component}.${transfer_extension}"
 [Source]
 Type=url-file
 Path=http://node-a6e4-b90b.lan:8081/
@@ -467,7 +467,7 @@ InstancesMax=2
 MatchPattern=${component}_@v.raw
 Mode=0444
 EOF
-    /usr/lib/systemd/systemd-sysupdate -C ${component} --verify=no update
+    /usr/lib/systemd/systemd-sysupdate -C "${component}" --verify=no update
 }
 
 main "$@"

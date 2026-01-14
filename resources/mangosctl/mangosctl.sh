@@ -71,12 +71,10 @@ SUBCOMMANDS
 
   
 EOF
-	exit 1
 }
 
 main() {
-	args="$(getopt -o '+b:c:v:' --long 'base-url:,ca-cert:,version:' -n 'mangosctl' -- "$@")"
-	if [ $? != 0 ]
+	if ! args="$(getopt -o '+b:c:v:' --long 'base-url:,ca-cert:,version:' -n 'mangosctl' -- "$@")"
 	then
 		echo "Error parsing arguments" >&2
 		usage
@@ -91,7 +89,10 @@ main() {
 				shift 2
 				;;
 			-c|--ca-cert)
-				CA_CERT="$2"
+				VAULT_CACERT="$2"
+				CONSUL_CACERT="$2"
+				NOMAD_CACERT="$2"
+				export VAULT_CACERT CONSUL_CACERT NOMAD_CACERT
 				shift 2
 				;;
 			-v|--version)
@@ -105,18 +106,21 @@ main() {
 			*)
 				echo "Error parsing arguments" >&2
 				usage
+				exit 1
 				;;
 		esac
 	done
 
 	if [ -z "${MANGOS_VERSION}" ]
 	then
-		MANGOS_VERSION="$(. /etc/os-release; echo ${IMAGE_VERSION})"
+		# shellcheck disable=SC1091
+		MANGOS_VERSION="$(. /etc/os-release; echo "${IMAGE_VERSION}")"
 	fi
 
 	if [ -z "${BASE_URL}" ]
 	then
-		BASE_URL="$(. /etc/os-release ; echo ${MKOSI_SERVE_URL})"
+		# shellcheck disable=SC1091
+		BASE_URL="$(. /etc/os-release ; echo "${MKOSI_SERVE_URL}")"
 	fi
 
 	case "$1" in
@@ -151,9 +155,9 @@ main() {
 		adduser)
 			shift
 			username="$1"
-			read -sp "Password for new user ${username}: " password
+			read -rsp "Password for new user ${username}: " password
 			echo
-			read -sp "Confirm password: " password2
+			read -rsp "Confirm password: " password2
 			echo
 			pwdfile=$(mktemp)
 			cat > "${pwdfile}" <<<"${password}"
@@ -162,8 +166,8 @@ main() {
 				echo "Passwords do not match" >&2
 				exit 1
 			fi
-			run_vault write auth/userpass/users/${username} password=@${pwdfile}
-			rm ${pwdfile}
+			run_vault write "auth/userpass/users/${username}" password=@"${pwdfile}"
+			rm "${pwdfile}"
 			;;
 		vault)
 			shift
@@ -185,10 +189,12 @@ main() {
 		"")
 			echo "No subcommand specified"
 			usage
+			exit 1
 			;;
 		*)
 			echo "Unknown subcommand $1"
 			usage
+			exit 1
 			;;
 	esac
 }
@@ -242,29 +248,30 @@ prefix_to_netmask() {
 	bits_to_mask=(0 128 192 224 240 248 252 254 255)
 
 	octets=0
-	while [ $octets -lt 4 ]
+	while [ ${octets} -lt 4 ]
 	do
-		octets=$(($octets + 1))
+		octets=$(( octets + 1 ))
 
-		if [ $bits -ge 8 ]
+		if [ ${bits} -ge 8 ]
 		then
 			rv="${rv}255."
-		elif [ $bits -le 0 ]
+		elif [ ${bits} -le 0 ]
 		then
 			rv="${rv}0."
 		else
-			rv="${rv}${bits_to_mask[$bits]}."
+			rv="${rv}${bits_to_mask[${bits}]}."
 		fi
-		bits=$(($bits - 8))
+		bits=$(( bits - 8 ))
 	done
 	echo "${rv%.}"
 }
 
 # Generate an "ip=" argument suitable for passing to the kernel command line
 ip_arg_for_default_interface() {
+	# shellcheck disable=SC2162
 	read _ _ gw _ dev _ ip _ < <(ip -o route get 8.8.8.8)
-	prefix="$(ip -o addr show dev $dev | grep ' inet ' | head -n 1 | grep -Eo '/[0-9]+' | cut -f2 -d/)"
-	netmask=$(prefix_to_netmask $prefix)
+	prefix="$(ip -o addr show dev "${dev}" | grep ' inet ' | head -n 1 | grep -Eo '/[0-9]+' | cut -f2 -d/)"
+	netmask=$(prefix_to_netmask "${prefix}")
 	printf '%s::%s:%s:%s:%s:none' "${ip}" "${gw}" "${netmask}" "$(hostname)" "${dev}"
 }
 
@@ -301,8 +308,7 @@ EOF
 do_step() {
 	step "$1"
 	shift
-	"$@"
-	if [ $? -eq 0 ]
+	if "$@"
 	then
 		success
 	else
@@ -322,21 +328,23 @@ do_install() {
 
 # Enroll recovery keys for encrypted partitions and store them in Vault
 enroll_recovery_keys() {
-	local vault_token="$1"
-	local machine_id="$(cat /etc/machine-id)"
-	local found_any=0
+	local vault_token machine_id found_any marker_dir devices
+	vault_token="$1"
+	machine_id="$(cat /etc/machine-id)"
+	found_any=0
 
-	local marker_dir="/var/lib/mangos/luks-recovery-keys-enrolled"
+	marker_dir="/var/lib/mangos/luks-recovery-keys-enrolled"
 	mkdir -p "${marker_dir}"
 
 	# Find all LUKS-encrypted partitions
-	local devices="$(lsblk -ln -o NAME,TYPE,FSTYPE | awk '$2=="part" && $3=="crypto_LUKS" {print "/dev/"$1}' | tr '\n' ' ')"
+	devices="$(lsblk -ln -o NAME,TYPE,FSTYPE | awk '$2=="part" && $3=="crypto_LUKS" {print "/dev/"$1}' | tr '\n' ' ')"
 
-	echo "> LUKS-encrypted devices found: $devices"
+	echo "> LUKS-encrypted devices found: ${devices}"
 
 	for device in ${devices}; do
+		local partlabel
 		echo "> Processing device: ${device}"
-		local partlabel="$(lsblk -n -o PARTLABEL "${device}" 2>/dev/null | tr -d ' \n\r\t')"
+		partlabel="$(lsblk -n -o PARTLABEL "${device}" 2>/dev/null | tr -d ' \n\r\t')"
 
 		# Skip if no valid partition label
 		if [ -z "${partlabel}" ]; then
@@ -345,7 +353,8 @@ enroll_recovery_keys() {
 		fi
 
 		# Skip if already enrolled
-		local marker_file="${marker_dir}/${partlabel}"
+		local marker_file
+		marker_file="${marker_dir}/${partlabel}"
 		if [ -f "${marker_file}" ]; then
 			echo "> Recovery key for ${partlabel} already enrolled, skipping"
 			continue
@@ -356,12 +365,14 @@ enroll_recovery_keys() {
 
 		# Generate and enroll recovery key (systemd-cryptenroll generates and prints the key)
 		# Use TPM to unlock the device, then enroll a new recovery key
-		local output=$(systemd-cryptenroll "${device}" --recovery-key --unlock-tpm2-device=auto 2>&1)
+		local output
+		output=$(systemd-cryptenroll "${device}" --recovery-key --unlock-tpm2-device=auto 2>&1)
 
 		# Extract recovery key - format: 6 lowercase alphanumeric groups of 8, separated by dashes
 		# Example: etklvner-lblhnbgl-kdtnujtk-ikjlgbur-lnlrjrrc-iuikkidg-feientnn-dkjeeuft
 		LUKS_RECOVERY_KEY_REGEX='[a-z0-9]{8}(-[a-z0-9]{8}){7}'
-		local recovery_key="$(echo "$output" | grep -oE "${LUKS_RECOVERY_KEY_REGEX}" | head -n 1)"
+		local recovery_key
+		recovery_key="$(echo "${output}" | grep -oE "${LUKS_RECOVERY_KEY_REGEX}" | head -n 1)"
 
 		if [ -n "${recovery_key}" ]; then
 			if VAULT_TOKEN="${vault_token}" vault kv put "secrets/mangos/recovery-keys/${machine_id}/${partlabel}" \
@@ -390,13 +401,13 @@ write_machine_id_metadata() {
 	node_auth_accessor="$(vault read -field=accessor sys/auth/node-cert)"
 
 	step "Looking up entity name for this node"
-	entity_name="$(vault write -field=name identity/lookup/entity alias_name=${HOSTNAME}.mangos alias_mount_accessor=${node_auth_accessor})"
+	entity_name="$(vault write -field=name identity/lookup/entity alias_name="${HOSTNAME}.mangos" alias_mount_accessor="${node_auth_accessor}")"
 
 	step "Setting machine-id as entity metadata"
 	machine_id="$(cat /etc/machine-id)"
 
 	# Read current metadata, merge with new machine_id, and write back
-	current_metadata="$(vault read -format=json identity/entity/name/${entity_name} | jq -r '.data.metadata // {}')"
+	current_metadata="$(vault read -format=json "identity/entity/name/${entity_name}" | jq -r '.data.metadata // {}')"
 	new_metadata="$(echo "${current_metadata}" | jq --arg mid "${machine_id}" '. + {machine_id: $mid}')"
 
 	# Convert JSON to key=value arguments for Vault CLI
@@ -414,19 +425,21 @@ do_enroll() {
 
 	if [ -z "${REGION}" ]
 	then
-		REGION="$(. /etc/environment.d/20-mangos.conf ; echo ${NOMAD_REGION})"
+		# shellcheck disable=SC1091
+		REGION="$(. /etc/environment.d/20-mangos.conf ; echo "${NOMAD_REGION}")"
 	fi
 
 	if [ -z "${DATACENTER}" ]
 	then
-		DATACENTER="$(. /etc/environment.d/20-mangos.conf ; echo ${NOMAD_DATACENTER})"
+		# shellcheck disable=SC1091
+		DATACENTER="$(. /etc/environment.d/20-mangos.conf ; echo "${NOMAD_DATACENTER}")"
 	fi
 
-	args="$(getopt -o 'g:r:d:' --long 'group:,region:,dc:,datacenter:' -n 'mangosctl enroll' -- "$@")"
-	if [ $? != 0 ]
+	if ! args="$(getopt -o 'g:r:d:' --long 'group:,region:,dc:,datacenter:' -n 'mangosctl enroll' -- "$@")"
 	then
 		echo "Error parsing arguments" >&2
 		usage
+		exit 1
 	fi
 
 	eval set -- "${args}"
@@ -452,6 +465,7 @@ do_enroll() {
 			*)
 				echo "Error parsing arguments" >&2
 				usage
+				exit 1
 				;;
 		esac
 	done
@@ -464,25 +478,27 @@ do_enroll() {
 
 	confext_dir="/var/lib/confexts/${HOSTNAME}"
 
-	mkdir -p ${confext_dir}/etc/{extension-release,environment}.d
-	echo 'ID=_any' > ${confext_dir}/etc/extension-release.d/extension-release.${HOSTNAME}
+	mkdir -p "${confext_dir}/etc/{extension-release,environment}.d"
+	echo 'ID=_any' > "${confext_dir}/etc/extension-release.d/extension-release.${HOSTNAME}"
 
-	echo CONSUL_DATACENTER=${REGION}-${DATACENTER} >> ${confext_dir}/etc/environment.d/20-mangos.conf
-	echo NOMAD_DATACENTER=${DATACENTER}            >> ${confext_dir}/etc/environment.d/20-mangos.conf
-	echo NOMAD_REGION=${REGION}                    >> ${confext_dir}/etc/environment.d/20-mangos.conf
+	{
+		echo CONSUL_DATACENTER="${REGION}-${DATACENTER}"
+		echo NOMAD_DATACENTER="${DATACENTER}"
+		echo NOMAD_REGION="${REGION}"
+	} >> "${confext_dir}/etc/environment.d/20-mangos.conf"
 
 	step "Adding Vault CA cert to system CA bundle"
 	localcerts=$(mktemp -d)
-	mkdir -p ${confext_dir}/etc/ssl/certs
-	vault read -format=raw pki-root/ca/pem > ${localcerts}/pki-root.crt
-	chronic update-ca-certificates --etccertsdir ${confext_dir}/etc/ssl/certs --localcertsdir ${localcerts}
-	rm ${confext_dir}/etc/ssl/certs/pki-root.pem
-	cp ${localcerts}/pki-root.crt ${confext_dir}/etc/ssl/certs/pki-root.pem
-	rm -rf ${localcerts}
+	mkdir -p "${confext_dir}/etc/ssl/certs"
+	vault read -format=raw pki-root/ca/pem > "${localcerts}/pki-root.crt"
+	chronic update-ca-certificates --etccertsdir "${confext_dir}/etc/ssl/certs" --localcertsdir "${localcerts}"
+	rm "${confext_dir}/etc/ssl/certs/pki-root.pem"
+	cp "${localcerts}/pki-root.crt" "${confext_dir}/etc/ssl/certs/pki-root.pem"
+	rm -rf "${localcerts}"
 	greenln Success
 
-	mkdir -p ${confext_dir}/etc/credstore
-	mkdir -p ${confext_dir}/etc/credstore.encrypted
+	mkdir -p "${confext_dir}/etc/credstore"
+	mkdir -p "${confext_dir}/etc/credstore.encrypted"
 
 	keyfile="${confext_dir}/etc/credstore.encrypted/mangos.key"
 	csr="${confext_dir}/etc/credstore/mangos.csr"
@@ -493,7 +509,7 @@ do_enroll() {
 
 	if ! [ -s "${csr}" ]
 	then
-		step "Generating Certificate Signing Request (CSR) $csr"
+		step 'Generating Certificate Signing Request (CSR)'" ${csr}"
 		openssl req -key <(systemd-creds decrypt "${keyfile}") -new -subj "/CN=${HOSTNAME}.mangos/" -out "${csr}"
 		greenln Success
 	fi
@@ -501,8 +517,8 @@ do_enroll() {
 	step "Submitting CSR to Vault for signing"
 	mkdir -p /var/lib/mangos
 	vault write -field=certificate pki-nodes/sign/node-cert \
-		csr=@${confext_dir}/etc/credstore/mangos.csr \
-		common_name=${HOSTNAME}.mangos \
+		csr=@"${confext_dir}/etc/credstore/mangos.csr" \
+		common_name="${HOSTNAME}.mangos" \
 		ttl=72h \
 		format=pem > /var/lib/mangos/mangos.crt
 	greenln Success
@@ -511,14 +527,15 @@ do_enroll() {
 	# Use the issued certificate to authenticate to Vault
 	# This both verifies that the auth method works, the node can authenticate,
 	# AND it creates the identity entity for this node.
-	NODE_VAULT_TOKEN=$(vault login -method=cert -path=node-cert -client-cert=/var/lib/mangos/mangos.crt -client-key=<(systemd-creds decrypt ${confext_dir}/etc/credstore.encrypted/mangos.key) -token-only)
+	# shellcheck disable=SC2034
+	NODE_VAULT_TOKEN="$(vault login -method=cert -path=node-cert -client-cert=/var/lib/mangos/mangos.crt -client-key=<(systemd-creds decrypt "${confext_dir}/etc/credstore.encrypted/mangos.key") -token-only)"
 	greenln Success
 
 	do_step "Writing machine ID metadata to Vault" write_machine_id_metadata
 
-	for group in ${!groups[@]}
+	for group in "${!groups[@]}"
 	do
-		do_step "Adding host to group '${group}'" chronic do_entity addgroup ${entity_name} ${group}
+		do_step "Adding host to group '${group}'" chronic do_entity addgroup "${entity_name}" "${group}"
 	done
 
 	step "Issuing certificates for Consul and Nomad"
@@ -542,11 +559,11 @@ do_enroll() {
 	if ! [ -s "/var/lib/consul/data/serf/local.keyring" ]
 	then
 		enckey=$(mktemp --suffix .json)
-		chown consul:consul $enckey
+		chown consul:consul "${enckey}"
 		step "Fetching Consul gossip encryption key from Vault"
-		vault read -field=encryption_key secrets/mangos/consul/gossip | jq -R '{encrypt:.}' > ${enckey}
+		vault read -field=encryption_key secrets/mangos/consul/gossip | jq -R '{encrypt:.}' > "${enckey}"
 		greenln Success
-		argv+=(-config-file=${enckey})
+		argv+=(-config-file="${enckey}")
 	fi
 
 	# If there's already an agent recovery token, we don't need to add a new one
@@ -554,7 +571,7 @@ do_enroll() {
 	then
 		step "Generating Consul agent recovery token"
 		agent_recovery_token=$(systemd-id128 -u new)
-		systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/consul.agent_recovery <<<${agent_recovery_token}
+		systemd-creds -H encrypt - "${confext_dir}/etc/credstore.encrypted/consul.agent_recovery" <<<"${agent_recovery_token}"
 		greenln Success
 	fi
 
@@ -569,10 +586,10 @@ do_enroll() {
 			-p "StateDirectory=consul/data consul/ssl" \
 			-p "Conflicts=consul.service" \
 			/usr/bin/consul agent \
-			-retry-join ${1} \
+			-retry-join "${1}" \
 			-config-dir=/usr/share/consul/ \
 			-datacenter "${REGION}-${DATACENTER}" \
-			"$argv[@]"
+			"${argv[@]}"
 		greenln Success
 	fi
 
@@ -588,7 +605,7 @@ do_enroll() {
 
 	if ! has_token agent
 	then
-		set_agent_token agent "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -node-identity $(hostname):${REGION}-${DATACENTER} -role-name=consul-agent -format=json |jq -r .SecretID)"
+		set_agent_token agent "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -node-identity "$(hostname):${REGION}-${DATACENTER}" -role-name=consul-agent -format=json |jq -r .SecretID)"
 	fi
 
 	if ! has_token default
@@ -624,15 +641,15 @@ do_enroll() {
 		CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create \
 			"${argv[@]}" \
 			-description "Nomad server and/or client on $(hostname)" \
-			-format=json | jq .SecretID -r | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/nomad.consul_token
+			-format=json | jq .SecretID -r | systemd-creds -H encrypt - "${confext_dir}/etc/credstore.encrypted/nomad.consul_token"
 		greenln Success
 	fi
 
 	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
 
 	step "Merging /etc/environment.d/20-mangos.conf into /etc/environment"
-	cat /etc/environment /etc/environment.d/20-mangos.conf | sort -u > ${confext_dir}/etc/environment.new
-	mv ${confext_dir}/etc/environment.new ${confext_dir}/etc/environment
+	cat /etc/environment /etc/environment.d/20-mangos.conf | sort -u > "${confext_dir}/etc/environment.new"
+	mv "${confext_dir}/etc/environment.new" "${confext_dir}/etc/environment"
 	greenln Success
 
 	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
@@ -660,20 +677,20 @@ do_entity() {
 		addgroup)
 			entity_name="$2"
 			group_name="$3"
-			if [ -z "$entity_name" -o -z "$group_name" ]
+			if [ -z "${entity_name}" ] || [ -z "${group_name}" ]
 			then
 				echo "Usage: $0 entity addgroup ENTITY GROUP" >&2
 				exit 1
 			fi
-			entity_id=$(vault read -field=id identity/entity/name/${entity_name})
-			members="$(vault read -format=json identity/group/name/${group_name} | jq -r '.data.member_entity_ids | join(",")')"
+			entity_id="$(vault read -field=id "identity/entity/name/${entity_name}")"
+			members="$(vault read -format=json "identity/group/name/${group_name}" | jq -r '.data.member_entity_ids | join(",")')"
 			if [ -z "${members}" ]
 			then
 				members="${entity_id}"
 			else
 				members="${members},${entity_id}"
 			fi
-			vault write identity/group/name/${group_name} member_entity_ids="${members}"
+			vault write "identity/group/name/${group_name}" member_entity_ids="${members}"
 			;;
 		*)
 			echo "Unknown subcommand $1" >&2
@@ -714,7 +731,7 @@ do_updatectl() {
 				mkdir -p "/run/${d#/usr/lib/}.d"
 				cat <<-EOF > "/run/${d#/usr/lib/}.d/source-path-override.conf"
 				[Source]
-				Path=${BASE_URL}/sysupdate$(grep 'Path=http:' ${d} | sed -e 's%\(.*\)/sysupdate%%g')
+				Path=${BASE_URL}/sysupdate$(grep 'Path=http:' "${d}" | sed -e 's%\(.*\)/sysupdate%%g')
 				EOF
 			done
 			return
@@ -751,6 +768,7 @@ fi
 EOF
 
 	# Add the snippets in reverse order.
+	# shellcheck disable=SC2046
 	cat $(printf '%s\n' /boot/grub/mangos_*.grub.cfg | tac) >> /boot/grub/grub.cfg
 
 	ip_arg="$(grep -oE 'ip=[^ ]+' /proc/cmdline)"
@@ -764,21 +782,23 @@ chronic() {
 		"$@"
 		return $?
 	fi
-	local tmp=$(mktemp)
-	rv=0
-	"$@" > ${tmp} 2>&1 || rv=$?
+	local tmp
+	tmp="$(mktemp)"
 
-	if [ $rv -ne 0 ]
+	rv=0
+	"$@" > "${tmp}" 2>&1 || rv=$?
+
+	if [ ${rv} -ne 0 ]
 	then
 		cat "${tmp}"
 	fi
-	rm -f ${tmp}
-	return $rv
+	rm -f "${tmp}"
+	return ${rv}
 }
 
 run_terraform() {
 	VAULT_TOKEN=$(systemd-creds decrypt /var/lib/private/vault.root_token) \
-	nsenter -t $(pidof vault) -n \
+	nsenter -t "$(pidof vault)" -n \
 	terraform -chdir=/var/lib/terraform "$@"
 }
 
@@ -833,7 +853,7 @@ do_bootstrap() {
 	export REGION DATACENTER
 
 	# Clean up from previous runs
-	if [ -n "$CLEANUP" ]
+	if [ -n "${CLEANUP}" ]
 	then
 		systemd-sysext unmerge
 		systemd-confext unmerge
@@ -846,8 +866,7 @@ do_bootstrap() {
 
 	echo "Downloading the full hashistack:"
 	do_updatectl update host component:{consul,consul-template,nomad,terraform,vault}
-	green Done
-	echo 
+	greenln Done
 
 	do_step "Merging Hashistack sysext" chronic systemd-sysext refresh --mutable=auto
 
@@ -855,6 +874,7 @@ do_bootstrap() {
 
 	do_step "Reloading systemd-resolved" chronic systemctl reload systemd-resolved
 
+	# shellcheck disable=SC2016
 	do_step "Bootstrapping vault" chronic systemd-run \
 		-u vault-bootstrap \
 		--uid=vault \
@@ -871,22 +891,22 @@ do_bootstrap() {
 		/usr/bin/vault server -config=/usr/share/vault-bootstrap
 
 	confext_dir="/var/lib/confexts/${HOSTNAME}"
-	mkdir -p ${confext_dir}/etc/extension-release.d
-	echo 'ID=_any' > ${confext_dir}/etc/extension-release.d/extension-release.${HOSTNAME}
-	mkdir -p ${confext_dir}/etc/credstore.encrypted
+	mkdir -p "${confext_dir}/etc/extension-release.d"
+	echo 'ID=_any' > "${confext_dir}/etc/extension-release.d/extension-release.${HOSTNAME}"
+	mkdir -p "${confext_dir}/etc/credstore.encrypted"
 
-	do_step "Saving encrypted unseal key and root token" $SHELL <<-EOF
-	jq -r '.keys[0]' /run/vault/init.json | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/vault.unseal_key
+	do_step "Saving encrypted unseal key and root token" "${SHELL}" <<-EOF
+	jq -r '.keys[0]' /run/vault/init.json | systemd-creds -H encrypt - "${confext_dir}/etc/credstore.encrypted/vault.unseal_key"
 	jq -r '.root_token' /run/vault/init.json | systemd-creds -H encrypt - /var/lib/private/vault.root_token
 	rm /run/vault/init.json
 	EOF
 
 	unseal_vault() {
-		systemd-creds decrypt ${confext_dir}/etc/credstore.encrypted/vault.unseal_key | jq '{key:.}' -R | chronic curl --unix-socket /run/vault/vault.sock http://127.0.0.1:8200/v1/sys/unseal --data @- -X POST
+		systemd-creds decrypt "${confext_dir}/etc/credstore.encrypted/vault.unseal_key" | jq '{key:.}' -R | chronic curl --unix-socket /run/vault/vault.sock http://127.0.0.1:8200/v1/sys/unseal --data @- -X POST
 	}
 	do_step "Unsealing vault" unseal_vault
 
-	do_step "Copying terraform files into place" $SHELL <<-EOF
+	do_step "Copying terraform files into place" "${SHELL}" <<-EOF
 	mkdir -p /var/lib/terraform
 	cp /usr/share/terraform/* /var/lib/terraform
 	EOF
@@ -899,7 +919,7 @@ do_bootstrap() {
 
 	do_step "Bootstrapping PKI infrastructure" run_terraform_apply -target=terraform_data.bootstrap-pki
 
-	do_step "Issuing certificates for Vault, Consul, and Nomad" $SHELL <<-EOF
+	do_step "Issuing certificates for Vault, Consul, and Nomad" "${SHELL}" <<-EOF
 
 	mkdir -p /var/lib/vault/ssl
 	chown -R vault:vault /var/lib/vault
@@ -929,8 +949,8 @@ do_bootstrap() {
 	do_step "Restarting Vault in non-bootstrap mode" chronic systemctl start vault
 
 	enckey=$(mktemp --suffix .json)
-	do_step "Generating encryption key for Consul" $SHELL <<-EOF
-	chown consul:consul $enckey
+	do_step "Generating encryption key for Consul" "${SHELL}" <<-EOF
+	chown consul:consul "${enckey}"
 	consul keygen | jq -R '{encrypt:.}' > ${enckey}
 	EOF
 
@@ -945,14 +965,16 @@ do_bootstrap() {
 		-retry-join 127.0.0.1 \
 		-config-dir=/usr/share/consul/ \
 		-datacenter "${REGION}-${DATACENTER}" \
-		-config-file=${enckey} -bootstrap -server
+		-config-file="${enckey}" -bootstrap -server
 
-	mkdir -p ${confext_dir}/etc/environment.d
-	echo CONSUL_DATACENTER=${REGION}-${DATACENTER} >> ${confext_dir}/etc/environment.d/20-mangos.conf
-	echo NOMAD_DATACENTER=${DATACENTER}            >> ${confext_dir}/etc/environment.d/20-mangos.conf
-	echo NOMAD_REGION=${REGION}                    >> ${confext_dir}/etc/environment.d/20-mangos.conf
+	mkdir -p "${confext_dir}/etc/environment.d"
+	{
+		echo "CONSUL_DATACENTER=${REGION}-${DATACENTER}"
+		echo NOMAD_DATACENTER="${DATACENTER}"
+		echo NOMAD_REGION="${REGION}"
+	} >> "${confext_dir}/etc/environment.d/20-mangos.conf"
 
-	do_step "Waiting until this node is the Consul leader" $SHELL <<-EOF
+	do_step "Waiting until this node is the Consul leader" "${SHELL}" <<-EOF
 	journalctl -u consul-bootstrap -f -I -n all | grep -q "cluster leadership acquired"
 	EOF
 
@@ -962,14 +984,14 @@ do_bootstrap() {
 	do_step "Bootstrapping Consul" chronic run_terraform_apply -target=terraform_data.consul-bootstrap
 
 	step "Writing Consul gossip encryption key to Vault"
-	jq -j .encrypt < ${enckey} | \
+	jq -j .encrypt < "${enckey}" | \
 	VAULT_TOKEN=$(systemd-creds decrypt /var/lib/private/vault.root_token) \
 	chronic vault write secrets/mangos/consul/gossip encryption_key=-
 	greenln Success
 
 	step "Generating Consul agent recovery token"
 	agent_recovery_token=$(systemd-id128 -u new)
-	systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/consul.agent_recovery <<<${agent_recovery_token}
+	systemd-creds -H encrypt - "${confext_dir}/etc/credstore.encrypted/consul.agent_recovery" <<<"${agent_recovery_token}"
 	greenln Success
 
 	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
@@ -988,18 +1010,18 @@ do_bootstrap() {
 	CONSUL_HTTP_TOKEN=${consul_mgmt_token} run_terraform_apply -target=terraform_data.consul-bootstrap-roles
 	greenln Success
 
-	set_agent_token agent                            "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -node-identity $(hostname):${REGION}-${DATACENTER} -role-name=consul-agent -format=json |jq -r .SecretID)"
+	set_agent_token agent                            "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -node-identity "$(hostname):${REGION}-${DATACENTER}" -role-name=consul-agent -format=json |jq -r .SecretID)"
 	set_agent_token default                          "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -role-name=consul-default -format=json | jq -r .SecretID)"
 	set_agent_token replication                      "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -role-name=consul-replication -format=json | jq -r .SecretID)"
 	set_agent_token config_file_service_registration "$(CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create -role-name=consul-registration -format=json | jq -r .SecretID)"
 
-        step "Creating vault token" 
+	step "Creating vault token" 
 	CONSUL_HTTP_TOKEN=${consul_mgmt_token} consul acl token create \
-						-service-identity vault:${REGION}-${DATACENTER} \
-						-format=json | jq -r .SecretID | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/vault.consul_token
+						-service-identity "vault:${REGION}-${DATACENTER}" \
+						-format=json | jq -r .SecretID | systemd-creds -H encrypt - "${confext_dir}/etc/credstore.encrypted/vault.consul_token"
 	greenln Success
 
-	echo VAULT_ADDR=https://vault.service.consul:8200 >> ${confext_dir}/etc/environment.d/20-mangos.conf
+	echo VAULT_ADDR=https://vault.service.consul:8200 >> "${confext_dir}/etc/environment.d/20-mangos.conf"
 
 	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
 	do_step "Restarting Vault" chronic systemctl restart vault
@@ -1011,13 +1033,13 @@ do_bootstrap() {
                         -policy-name nomad-server      \
                         -policy-name nomad-client      \
                         -description "Nomad Server/Client token on ${HOSTNAME}" \
-                        -format=json | jq .SecretID -r | systemd-creds -H encrypt - ${confext_dir}/etc/credstore.encrypted/nomad.consul_token
+                        -format=json | jq .SecretID -r | systemd-creds -H encrypt - "${confext_dir}/etc/credstore.encrypted/nomad.consul_token"
 	greenln Success
 
 	do_step "Reloading confexts" chronic systemd-confext refresh --mutable=auto
 
 	mkdir -p /run/nomad
-	systemd-creds decrypt ${confext_dir}/etc/credstore.encrypted/nomad.consul_token | jq -R '{consul:{token:.}}' > /run/nomad/consul-agent.json
+	systemd-creds decrypt "${confext_dir}/etc/credstore.encrypted/nomad.consul_token" | jq -R '{consul:{token:.}}' > /run/nomad/consul-agent.json
 
 	chown nomad:nomad /run/nomad/consul-agent.json
 
@@ -1049,7 +1071,7 @@ do_bootstrap() {
 	done
 	greenln Success
 
-	echo   NOMAD_ADDR=https://nomad.service.consul:4646 >> ${confext_dir}/etc/environment.d/20-mangos.conf
+	echo   NOMAD_ADDR=https://nomad.service.consul:4646 >> "${confext_dir}/etc/environment.d/20-mangos.conf"
 	export NOMAD_ADDR=https://nomad.service.consul:4646
 	export NOMAD_CACERT=/var/lib/nomad/ssl/ca.pem
 
@@ -1094,12 +1116,11 @@ run_vault() {
 
 run_nomad() {
 	set -e
-	NOMAD_TOKEN=$(vault read -field=secret_id nomad/creds/${NOMAD_ROLE:-management}) nomad "$@"
+	NOMAD_TOKEN=$(vault read -field=secret_id "nomad/creds/${NOMAD_ROLE:-management}") nomad "$@"
 }
 
 do_addext() {
-	args="$(getopt -o 'v:' --long 'version:' -n 'mangosctl addext' -- "$@")"
-	if [ $? != 0 ]
+	if ! args="$(getopt -o 'v:' --long 'version:' -n 'mangosctl addext' -- "$@")"
 	then
 		echo "Error parsing arguments" >&2
 		usage
@@ -1144,7 +1165,8 @@ if [ "$1" = "sudo" ]
 then
 	if [ -e "/var/lib/private/vault.root_token" ]
 	then
-		export VAULT_TOKEN=$(systemd-creds decrypt /var/lib/private/vault.root_token)
+		VAULT_TOKEN="$(systemd-creds decrypt /var/lib/private/vault.root_token)"
+		export VAULT_TOKEN
 	else
 		echo "Could not find root token" >&2
 	fi
@@ -1160,10 +1182,11 @@ then
 	export VAULT_ADDR="${VAULT_ADDR:-https://vault.service.consul:8200/}"
 	export NOMAD_ADDR="${NOMAD_ADDR:-https://nomad.service.consul:4646/}"
 
-	if [ -n "$VAULT_TOKEN" ]
+	if [ -n "${VAULT_TOKEN}" ]
 	then
-		export CONSUL_HTTP_TOKEN=$(VAULT_TOKEN=$VAULT_TOKEN vault read -field=token consul/creds/management)
-		export NOMAD_TOKEN=$(VAULT_TOKEN=$VAULT_TOKEN vault read -field=secret_id nomad/creds/management)
+		CONSUL_HTTP_TOKEN="$(VAULT_TOKEN="${VAULT_TOKEN}" vault read -field=token consul/creds/management)"
+		NOMAD_TOKEN="$(VAULT_TOKEN="${VAULT_TOKEN}" vault read -field=secret_id nomad/creds/management)"
+		export CONSUL_HTTP_TOKEN NOMAD_TOKEN
 	fi
 	shift
 	if [ "$1" = "--" ]

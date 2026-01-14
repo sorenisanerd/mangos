@@ -42,11 +42,11 @@ rows=40
 build=0
 testid=$$
 
-asciinema_rec=""
+asciinema_rec=()
 
 if which asciinema > /dev/null 2>&1
 then
-        asciinema_rec="asciinema rec --append --cols ${cols} --rows ${rows} mangos-${testid}.acast -c"
+        asciinema_rec=("asciinema" "rec" "--append" "--cols" "${cols}" "--rows" "${rows}" "mangos-${testid}.acast" "-c")
 fi
 
 
@@ -70,7 +70,7 @@ do
             shift
             ;;
         --no-asciinema)
-            asciinema_rec=""
+            asciinema_rec=()
             shift
             ;;
     esac
@@ -79,23 +79,31 @@ done
 if [ "${build}" = 1 ]
 then
     echo Building mangos
-    mkosi -f --profile=hashistack ${bumparg}
+    mkosi -f --profile=hashistack "${bumparg}"
 
     echo Building installer
     mkosi --profile=installer -f
 fi
 
 slice="mangos-test-${testid}.slice"
-systemd_run="systemd-run --user --slice ${slice}"
+systemd_run() {
+    systemd-run --user --slice "${slice}" "$@"
+}
 
-trap "echo exit code: $?; systemctl --user stop mangos-test-${testid}.slice; journalctl --no-pager --user -u ${slice}" EXIT
+cleanup=()
+# shellcheck disable=SC2154
+trap 'echo exit code: $?; for cmd in "${cleanup[@]}"; do ${cmd}; done;' EXIT
+
+
+cleanup+=("systemctl --user stop mangos-test-${testid}.slice")
+cleanup+=("journalctl --no-pager --user -u ${slice}")
 
 step 'Publish build to sysupdate dir'
-SYSUPDATE_DISTDIR=$(pwd)/dist/sysupdate resources/publish-build 
+SYSUPDATE_DISTDIR=$(pwd)/dist/sysupdate resources/publish-build
 report_outcome
 
 step 'Launch web server (mkosi serve)'
-$systemd_run -u "mangos-test-${testid}-serve" -q --working-directory $(pwd)/dist -- python3 -m http.server 8081
+systemd_run -u "mangos-test-${testid}-serve" -q --working-directory "$(pwd)/dist" -- python3 -m http.server 8081
 report_outcome
 
 tmpdir="$(mktemp -d)"
@@ -105,7 +113,7 @@ tpmdir="${tmpdir}/tpm"
 mkdir -p "${tpmdir}"
 
 step "Prepping the TPM"
-$systemd_run -u "mangos-test-${testid}-tpm-prep" -q -d --wait -- \
+systemd_run -u "mangos-test-${testid}-tpm-prep" -q -d --wait -- \
     mkosi sandbox -- \
     swtpm_setup --tpm-state "${tpmdir}" \
         --tpm2 --pcr-banks sha256 \
@@ -131,7 +139,7 @@ target_disk="${tmpdir}/target_disk.raw"
 # /var: 4G minimum
 # Total: ~17.6GB
 step Creating target disk
-$systemd_run -q -d --wait -- mkosi sandbox -- qemu-img create "${target_disk}" 30G
+systemd_run -q -d --wait -- mkosi sandbox -- qemu-img create "${target_disk}" 30G
 report_outcome
 
 run() {
@@ -149,7 +157,7 @@ run() {
                 src="${arg#*:}"
                 id="${arg%%:*}"
                 qemu_args="${qemu_args}-blockdev driver=raw,node-name=${id},discard=unmap,file.driver=file,file.filename=${src},file.aio=io_uring,cache.direct=yes,cache.no-flush=yes -device virtio-blk-pci,drive=${id},serial=${id},bootindex=${bootindex} "
-                bootindex=$(($bootindex + 1))
+                bootindex=$(( bootindex + 1 ))
                 shift
                 ;;
             --wait|-P)
@@ -163,7 +171,7 @@ run() {
         esac
     done
 
-    $systemd_run -u "mangos-test-${testid}-swtpm" -q -d -- \
+    systemd_run -u "mangos-test-${testid}-swtpm" -q -d -- \
         mkosi sandbox -- \
         swtpm socket --tpmstate dir="${tpmdir}" --ctrl type=unixio,path="${tmpdir}/swtpm-sock" --tpm2
 
@@ -212,8 +220,10 @@ mkosi sandbox -- \
 EOF
     chmod +x "${script}"
 
-    $systemd_run -u "mangos-test-${testid}-qemu" -q -d -E TERM=xterm-256color ${sdrun_args} -- \
-        ${asciinema_rec} "${script}"
+    # sdrun_args may contain multiple arguments, so it needs to NOT be quoted
+    # shellcheck disable=SC2086
+    systemd_run -u "mangos-test-${testid}-qemu" -q -d --setenv={XAUTHORITY,DISPLAY,WAYLAND_DISPLAY} -E TERM=xterm-256color ${sdrun_args} -- \
+        "${asciinema_rec[@]}" "${script}"
     sleep 2
 }
 
@@ -232,7 +242,7 @@ mkosi box -- virt-fw-vars --inplace "${tmpdir}/efivars.fd" --append-boot-filepat
 
 varsjson="$(mktemp)"
 
-mkosi box -- virt-fw-vars -i "${tmpdir}/efivars.fd" --output-json - 2> /dev/null | jq '{variables:[.variables as $vars | $vars[] | select(.name=="BootOrder") as $BootOrder | $BootOrder + {data:($vars[] | select(.data | test("'$(echo -n mangos | iconv -f ascii -t UCS2 | xxd -p)'")) | .name | capture("(?<num>..)$") | (.num + "00" + $BootOrder.data))}]}' > "${varsjson}"
+mkosi box -- virt-fw-vars -i "${tmpdir}/efivars.fd" --output-json - 2> /dev/null | jq '{variables:[.variables as $vars | $vars[] | select(.name=="BootOrder") as $BootOrder | $BootOrder + {data:($vars[] | select(.data | test("'"$(echo -n mangos | iconv -f ascii -t UCS2 | xxd -p)"'")) | .name | capture("(?<num>..)$") | (.num + "00" + $BootOrder.data))}]}' > "${varsjson}"
 mkosi box -- virt-fw-vars --inplace "${tmpdir}/efivars.fd" --set-json "${varsjson}"
 
 step 'Run VM (install mangos)'
@@ -258,9 +268,9 @@ chmod +x "${tmpdir}/is_ready.sh"
 
 # Exit status 130 means killed by signal 2 (SIGINT)
 step 'Waiting for installed OS to be ready'
-$systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --wait -- \
+systemd_run -u "mangos-test-${testid}-socat" -d -p SuccessExitStatus=130 -q --wait -- \
     mkosi --debug sandbox -- socat VSOCK-LISTEN:23433,fork,socktype=5 EXEC:"${tmpdir}/is_ready.sh"
-
+report_outcome
 
 step ssh into VM
 
@@ -308,14 +318,12 @@ ssh_rc=$?
 kill ${tail_pid} 2>/dev/null || true
 wait ${tail_pid} 2>/dev/null || true
 
-trap - EXIT
-
 if [ ${ssh_rc} -eq 0 ]; then
     success
-    echo "Mangos test ${testid} succeeded" | $systemd_run -q -u "mangos-test-${testid}-result" -- cat
+    echo "Mangos test ${testid} succeeded" | systemd_run -q -u "mangos-test-${testid}-result" -- cat
 else
     failure
-    echo "Mangos test ${testid} failed" | $systemd_run -q -u "mangos-test-${testid}-result" -- cat
+    echo "Mangos test ${testid} failed" | systemd_run -q -u "mangos-test-${testid}-result" -- cat
     echo "--- Tail of remote self-test output (last 200 lines) ---"
     tail -n 200 "${diag_ssh_out}" || true
     exit ${ssh_rc}

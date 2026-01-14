@@ -2,7 +2,7 @@
 
 img="$1"
 
-trailing_zeros_start_at="$(hexdump "${img}" | tail -n 3 | grep '^\*$' -B 1 | head -n 1 | cut -f1 -d' ')"
+trailing_zeros_start_at="$(hexdump "${img}" | tail -n 4 | grep '^\*$' -B 1 | head -n 1 | cut -f1 -d' ')"
 
 if [ -z "${trailing_zeros_start_at}" ]
 then
@@ -10,4 +10,5 @@ then
 	exit 0
 fi
 
-truncate --size $((0x0${trailing_zeros_start_at})) ${img}
+truncate --size $((0x0${trailing_zeros_start_at})) "${img}"
+
