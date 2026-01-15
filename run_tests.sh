@@ -301,6 +301,7 @@ cleanup_ssh_tail() {
 }
 trap cleanup_ssh_tail EXIT
 
+set -o pipefail
 # Start ssh pipeline in background, using stdbuf to avoid buffering
 stdbuf -oL "${ssh_cmd[@]}" 2>&1 | stdbuf -oL tee "${diag_ssh_out}" &
 ssh_pid=$!
