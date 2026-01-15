@@ -101,6 +101,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
+          name: acast
           path: mangos-*.acast
       - name: Upload build artifact (disk)
         id: upload-disk
