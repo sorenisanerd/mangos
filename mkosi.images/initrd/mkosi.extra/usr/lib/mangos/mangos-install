@@ -48,7 +48,8 @@ fi
 
 # Get the partition UUID for the ESP we booted from. Set by the
 # kernel EFI stub.
-boot_uuid="$(tail -c +5 /sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f | head -c 72 | iconv -f UCS2 -t UTF-8)"
+# shellcheck disable=SC2002
+boot_uuid="$(cat /sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f | tail -c +5 | head -c 72 | iconv -f UCS2 -t UTF-8)"
 
 # Mount it at /boot
 mkdir /boot
