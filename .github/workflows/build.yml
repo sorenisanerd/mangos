@@ -10,16 +10,16 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - name: Install cosign
-        uses: sigstore/cosign-installer@v3.9.1
-      - name: setup-mkosi
-        uses: sorenisanerd/mkosi@main
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Run linter
         run: ./lint.sh
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.9.1
+      - name: setup-mkosi
+        uses: sorenisanerd/mkosi@main
       - uses: dsaltares/fetch-gh-release-asset@master
         id: tools-fetch
         with:
@@ -97,13 +97,16 @@ jobs:
           MANGOS_GITHUB_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           mkosi -E RUNNER_ENVIRONMENT --debug
-          rm *.zip mkosi.images/*/bin/*
       - name: List built artifacts
         run: ls out/
       - name: Export image version for later steps
         run: echo IMAGE_VERSION="$(./mkosi.version)" >> $GITHUB_ENV
       - name: Free Disk Space
-        run: sudo rm -rf /usr/local/lib/android || true
+        run: |
+          sudo rm -rf /usr/local/lib/android || true
+          rm *.zip mkosi.images/*/bin/* || true
+      - name: Install asciinema
+        run: sudo apt-get install -y asciinema
       - name: Test it
         run: |
           #!/bin/bash
@@ -125,6 +128,13 @@ jobs:
           done
 #      - name: Sign artifacts
 #        run: for file in out/mangos* ; do cosign sign-blob -d -y --bundle "${file}.sigbundle" "${file}" > /dev/null; done
+      - name: Upload asciinema cast files
+        id: upload-acast
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: acast
+          path: mangos-*.acast
       - name: Upload build artifact (disk)
         id: upload-disk
         uses: actions/upload-artifact@v4
