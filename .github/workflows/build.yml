@@ -106,7 +106,7 @@ jobs:
           sudo rm -rf /usr/local/lib/android || true
           rm *.zip mkosi.images/*/bin/* || true
       - name: Install asciinema
-        run: sudo apt-get install -y asciinema
+        run: true # sudo apt-get install -y asciinema
       - name: Test it
         run: |
           #!/bin/bash
