@@ -74,18 +74,28 @@ jobs:
         run: |
           sudo rm -rf /usr/local/lib/android || true
           rm *.zip mkosi.images/*/bin/* || true
-      - name: Install asciinema
-        run: sudo apt-get install -y asciinema
-      - name: Test it
+      - name: Install asciinema and ovmf
         run: |
           #!/bin/bash
           set -e
+
           sudo apt-get update -y
-          # mkosi doesn't pick this up from the tools dir for some reason
-          sudo apt-get install -y ovmf
+
+          # Although we run qemu through `mkosi box` which should mask
+          # /usr, somehow ovmf is not found unless we install it here.
+          # Perhaps some mount propagation stuff because of systemd-run?
+          #
+          # Asciinema lets us record the VM text console.
+          sudo apt-get install -y ovmf asciinema
+      - name: Run (only) installer test with nvme block device
+        run: |
+          #!/bin/bash
           ./run_tests.sh --blockdev-type nvme --no-self-test
+
+      - name: Run full self test with virtio block device
+        run: |
+          #!/bin/bash
           ./run_tests.sh
-          exit $?
 
       - name: Remove symlinks
         run: find out/ -type l -delete
