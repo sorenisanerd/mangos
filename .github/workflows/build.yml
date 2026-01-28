@@ -119,11 +119,13 @@ jobs:
           # Asciinema lets us record the VM text console.
           sudo apt-get install -y ovmf asciinema
       - name: Run (only) installer test with nvme block device
+        timeout-minutes: 15
         run: |
           #!/bin/bash
           ./run_tests.sh --blockdev-type nvme --no-self-test
 
       - name: Run full self test with virtio block device
+        timeout-minutes: 15
         run: |
           #!/bin/bash
           ./run_tests.sh
