@@ -21,6 +21,13 @@ resource "vault_mount" "pki-svc" {
   path                  = var.intermediate-pki-svc-path
   type                  = "pki"
   max_lease_ttl_seconds = var.intermediate-max-lease-ttl
+  allowed_response_headers = [
+    "Last-Modified",
+    "Location",
+    "Replay-Nonce",
+    "Link"
+  ]
+  passthrough_request_headers = ["If-Modified-Since"]
 }
 
 resource "vault_mount" "pki-nodes" {
