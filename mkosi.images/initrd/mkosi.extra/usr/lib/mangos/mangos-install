@@ -80,6 +80,8 @@ partition_device_name() {
 	esac
 }
 
+install_target="$(readlink -f "${install_target}")"
+
 ${echo} /usr/lib/systemd/systemd-pull --force --verify=no --roothash=no --verity=no --direct raw "file://${rootimg}" "$(partition_device_name "${install_target}" 5)"
 
 # Extract partition UUID and set partition name from the filename.
