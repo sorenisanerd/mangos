@@ -88,7 +88,7 @@ then
 	usage
 fi
 
-install_target="/dev/vdb"
+install_target=/dev/disk/by-id/virtio-persistent
 
 eval set -- "${args}"
 while true
@@ -101,10 +101,10 @@ do
         --blockdev-type)
             case "$2" in
                 virtio-blk-pci)
-                    install_target=/dev/vdb
+                    install_target=/dev/disk/by-id/virtio-persistent
                     ;;
                 nvme)
-                    install_target=/dev/nvme1n1
+                    install_target=/dev/disk/by-id/nvme-QEMU_NVMe_Ctrl_persistent
                     ;;
                 *)
                     echo "Invalid block device type: $2" >&2
